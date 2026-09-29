@@ -4,85 +4,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Consola de Monitoreo</title>
-<style>
-  :root { --bg:#f7f7f5; --panel:#ffffff; --text:#1d1d1b; --muted:#6b6b66; --line:#e4e4df; --accent:#2b5fa8;
-          --ok:#2f7d4f; --warn:#b7791f; --bad:#c0392b; --crit:#8e1b10; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#161615; --panel:#1f1f1d; --text:#ecece8; --muted:#9a9a93; --line:#2f2f2c; --accent:#7aa7e8;
-            --ok:#5fbf85; --warn:#e0a84a; --bad:#ef6f61; --crit:#ff8a7a; }
-  }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, sans-serif; }
-  header { padding:14px 16px 0; border-bottom:1px solid var(--line); background:var(--panel); }
-  .top { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:baseline; }
-  h1 { font-size:18px; margin:0; }
-  h2 { font-size:15px; margin:0 0 10px; }
-  .muted { color:var(--muted); }
-  nav { display:flex; gap:4px; margin-top:12px; overflow-x:auto; }
-  nav button { background:none; border:0; border-bottom:2px solid transparent; padding:8px 12px; font:inherit;
-               color:var(--muted); cursor:pointer; white-space:nowrap; }
-  nav button.active { color:var(--text); border-bottom-color:var(--accent); font-weight:600; }
-  .badge { display:inline-block; min-width:20px; padding:0 6px; border-radius:10px; background:var(--bad); color:#fff;
-           font-size:11px; text-align:center; margin-left:4px; }
-  section.tab { display:none; padding:16px; }
-  section.tab.active { display:block; }
-  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:14px; }
-  .kpi { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; }
-  .kpi b { display:block; font-size:22px; font-variant-numeric:tabular-nums; }
-  .toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
-  input, select, textarea { font:inherit; color:var(--text); background:var(--panel); border:1px solid var(--line);
-                            border-radius:6px; padding:6px 8px; }
-  button.btn { font:inherit; border:1px solid var(--line); background:var(--panel); color:var(--text);
-               border-radius:6px; padding:6px 12px; cursor:pointer; }
-  button.btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
-  button.btn.danger { border-color:var(--bad); color:var(--bad); }
-  .wrap { overflow-x:auto; }
-  table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); }
-  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
-  th { font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
-  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
-  .badge[hidden] { display:none; }
-  td.nowrap { white-space:nowrap; }
-  td.id, code { font-family:ui-monospace, monospace; font-size:12px; white-space:nowrap; }
-  .APPROVE { color:var(--ok); font-weight:600; } .REVIEW { color:var(--warn); font-weight:600; }
-  .DECLINE { color:var(--bad); font-weight:600; }
-  .sev-CRITICAL { color:var(--crit); font-weight:700; } .sev-HIGH { color:var(--bad); font-weight:600; }
-  .sev-MEDIUM { color:var(--warn); } .sev-LOW { color:var(--muted); }
-  .reasons { font-size:12px; color:var(--muted); }
-  tr.risk-REVIEW { background:color-mix(in srgb, var(--warn) 10%, transparent); }
-  tr.risk-DECLINE { background:color-mix(in srgb, var(--bad) 10%, transparent); }
-  tr.risk-REVIEW .reasons, tr.risk-DECLINE .reasons { color:var(--text); }
-  body.only-risk tr.risk-APPROVE { display:none; }
-  tr.clickable { cursor:pointer; } tr.clickable:hover { background:color-mix(in srgb, var(--accent) 8%, transparent); }
-  tr.selected { outline:2px solid var(--accent); outline-offset:-2px; }
-  .overdue { color:var(--bad); font-weight:600; }
-  .split { display:grid; grid-template-columns:minmax(0,3fr) minmax(0,2fr); gap:16px; align-items:start; }
-  @media (max-width: 900px) { .split { grid-template-columns:1fr; } }
-  .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; }
-  .panel dl { display:grid; grid-template-columns:max-content 1fr; gap:4px 12px; margin:0 0 12px; }
-  .panel dt { color:var(--muted); } .panel dd { margin:0; }
-  .panel ul { margin:0 0 12px; padding-left:18px; }
-  .actions { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
-  .actions .row { display:flex; gap:8px; flex-wrap:wrap; }
-  textarea { width:100%; min-height:70px; resize:vertical; }
-  .msg { margin-top:8px; font-size:13px; } .msg.err { color:var(--bad); } .msg.ok { color:var(--ok); }
-  .history { font-size:12px; border-left:2px solid var(--line); padding-left:10px; }
-  .history div { margin-bottom:6px; }
-  .bar { height:8px; background:var(--accent); border-radius:4px; min-width:2px; }
-  .empty { padding:24px; text-align:center; color:var(--muted); }
-</style>
+<link rel="stylesheet" href="/static/console.css">
 </head>
 <body>
 <header>
   <div class="top">
     <div><h1>Consola de monitoreo transaccional</h1><span class="muted">Fraude y PLA/FT · Adquirencia · Cash-in · Cash-out</span></div>
-    <div class="muted"><span id="status">Conectando…</span> · Reglas <code id="rs-version">—</code></div>
+    <div class="muted top-right">
+      <label>Tu usuario <input id="user" placeholder="ej. analista1" size="14"></label>
+      <span><span id="status">Conectando…</span> · Reglas <code id="rs-version">—</code></span>
+    </div>
   </div>
   <nav>
     <button data-tab="live" class="active">Tiempo real</button>
     <button data-tab="alerts">Alertas <span class="badge" id="badge-open" hidden></span></button>
     <button data-tab="rules">Reglas</button>
+    <button data-tab="params">Parámetros</button>
     <button data-tab="metrics">Métricas</button>
+    <button data-tab="history">Historial de cambios</button>
   </nav>
 </header>
 
@@ -125,7 +64,6 @@
         <option value="CLOSED_NO_ROS">Cerradas sin ROS</option>
       </select>
     </label>
-    <label>Tu usuario <input id="user" placeholder="ej. analista1" size="14"></label>
     <span class="muted">Las alertas se ordenan por severidad; clic en una para analizarla.</span>
   </div>
   <div class="split">
@@ -140,15 +78,44 @@
 <!-- =============================== REGLAS ============================== -->
 <section class="tab" id="tab-rules">
   <div class="toolbar">
-    <input id="r-search" placeholder="Buscar por ID, nombre o condición" size="32">
-    <select id="r-channel"><option value="">Todos los canales</option><option>ACQUIRING</option><option>CASH_IN</option><option>CASH_OUT</option></select>
+    <input id="r-search" placeholder="Buscar por ID, nombre o condición" size="30">
+    <select id="r-channel"><option value="">Todos los canales</option><option value="ACQUIRING">Adquirencia</option><option value="CASH_IN">Cash-in</option><option value="CASH_OUT">Cash-out</option></select>
     <select id="r-category"><option value="">Todas las categorías</option><option>FRAUD</option><option>AML</option><option>CFT</option><option>OPERATIONAL</option></select>
+    <select id="r-state"><option value="">Todos los estados</option><option value="active">Activas</option><option value="shadow">En sombra</option><option value="disabled">Desactivadas</option></select>
     <span class="muted" id="r-count"></span>
+    <span class="spacer"></span>
+    <button class="btn primary" id="r-new">+ Nueva regla</button>
   </div>
-  <div class="wrap"><table>
-    <thead><tr><th>ID</th><th>Regla</th><th>Canales</th><th>Categoría</th><th>Severidad</th><th>Acción</th><th class="num">Score</th><th>Modo</th><th class="num">Disparos</th><th>Condición</th><th>Normativa</th></tr></thead>
-    <tbody id="rule-rows"></tbody>
-  </table></div>
+  <div class="split rules-split">
+    <div class="wrap"><table class="compact">
+      <thead><tr><th>ID</th><th>Regla</th><th>Canales</th><th>Acción</th><th class="num">Score</th><th>Estado</th><th class="num">Disparos</th></tr></thead>
+      <tbody id="rule-rows"></tbody>
+    </table></div>
+    <div class="panel sticky" id="rule-editor">
+      <h2>Reglas de monitoreo</h2>
+      <p>Hacé clic en una regla para ver <b>qué hace</b>, sus parámetros y cuántas veces se disparó, y para modificarla.</p>
+      <p>Con <b>+ Nueva regla</b> podés crear una propia. Antes de guardarla podés <b>probarla contra el tráfico reciente</b> para ver cuántas operaciones habría marcado y cómo cambiarían las decisiones.</p>
+      <p class="muted">Recomendación: creá las reglas nuevas en modo <b>sombra</b> (se evalúan y registran, pero no afectan la decisión) y activalas cuando confirmes que funcionan como esperás.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ PARÁMETROS ============================= -->
+<section class="tab" id="tab-params">
+  <div class="toolbar">
+    <input id="p-search" placeholder="Buscar parámetro, descripción o regla" size="34">
+    <label><input type="checkbox" id="p-used"> Sólo los usados por reglas</label>
+    <span class="muted">Los montos están en pesos. Cambiá los valores y usá <b>Ver impacto</b> antes de guardar.</span>
+  </div>
+  <div id="p-groups"></div>
+  <div class="changebar" id="p-bar" hidden>
+    <span id="p-bar-text"></span>
+    <span class="spacer"></span>
+    <button class="btn" id="p-discard">Descartar</button>
+    <button class="btn" id="p-preview">Ver impacto</button>
+    <button class="btn primary" id="p-save">Guardar cambios</button>
+  </div>
+  <div class="panel" id="p-impact" hidden></div>
 </section>
 
 <!-- ============================== MÉTRICAS ============================= -->
@@ -170,232 +137,16 @@
   </div>
 </section>
 
-<script>
-const $ = (id) => document.getElementById(id);
-const fmtMoney = new Intl.NumberFormat('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-const fmtInt = (n) => Number(n || 0).toLocaleString('es-AR');
-const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
-                set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
-function el(tag, text, cls) { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
-function row(cells) { const tr = document.createElement('tr'); cells.forEach(c => tr.append(c)); return tr; }
+<!-- ============================= HISTORIAL ============================= -->
+<section class="tab" id="tab-history">
+  <p class="muted">Registro auditado de cada cambio en reglas y parámetros: quién, cuándo, valor anterior y nuevo, y la versión del conjunto de reglas resultante.</p>
+  <div class="wrap"><table>
+    <thead><tr><th>Cambio</th><th>Usuario</th><th>Detalle</th><th>Versión resultante</th></tr></thead>
+    <tbody id="h-rows"></tbody>
+  </table></div>
+  <div class="empty" id="h-empty">Todavía no hubo cambios desde la consola.</div>
+</section>
 
-const STATUS_LABEL = {
-  OPEN: 'Abierta', IN_REVIEW: 'En análisis', ESCALATED_COMPLIANCE: 'Escalada a Cumplimiento',
-  CLOSED_FALSE_POSITIVE: 'Cerrada – falso positivo', CLOSED_CONFIRMED_FRAUD: 'Cerrada – fraude confirmado',
-  ROS_FILED: 'ROS presentado', CLOSED_NO_ROS: 'Cerrada sin ROS',
-};
-const NEXT = {
-  OPEN: [['IN_REVIEW', 'Tomar alerta', 'primary']],
-  IN_REVIEW: [['CLOSED_FALSE_POSITIVE', 'Cerrar: falso positivo', ''], ['CLOSED_CONFIRMED_FRAUD', 'Cerrar: fraude confirmado', 'danger'],
-              ['ESCALATED_COMPLIANCE', 'Escalar a Cumplimiento', 'primary']],
-  ESCALATED_COMPLIANCE: [['ROS_FILED', 'ROS presentado a la UIF', 'danger'], ['CLOSED_NO_ROS', 'Cerrar sin ROS', '']],
-};
-
-async function api(path, opts = {}) {
-  const r = await fetch(path, opts);
-  const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(body.detail || ('Error ' + r.status));
-  return body;
-}
-
-// ------------------------------------------------------------------ tabs
-let current = store.get('tab') || 'live';
-function show(tab) {
-  current = tab; store.set('tab', tab);
-  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-  document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('active', s.id === 'tab-' + tab));
-  if (tab === 'alerts') loadAlerts();
-  if (tab === 'rules') loadRules();
-  if (tab === 'metrics') loadMetrics();
-}
-document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => show(b.dataset.tab)));
-
-// ------------------------------------------------------------ live feed
-const counts = {total:0, APPROVE:0, REVIEW:0, DECLINE:0}; let latSum = 0;
-const onlyRisk = $('only-risk');
-onlyRisk.checked = store.get('onlyRisk') === '1';
-document.body.classList.toggle('only-risk', onlyRisk.checked);
-onlyRisk.addEventListener('change', () => { document.body.classList.toggle('only-risk', onlyRisk.checked); store.set('onlyRisk', onlyRisk.checked ? '1' : '0'); });
-
-const es = new EventSource('/v1/stream/decisions');
-es.onopen = () => $('status').textContent = '● En vivo';
-es.onerror = () => $('status').textContent = 'Reconectando…';
-es.onmessage = (ev) => {
-  const d = JSON.parse(ev.data);
-  $('live-empty').hidden = true;
-  counts.total++; counts[d.action]++; latSum += d.latency_ms;
-  for (const k of ['total','APPROVE','REVIEW','DECLINE']) $('k-'+k).textContent = fmtInt(counts[k]);
-  $('k-lat').textContent = (latSum / counts.total).toFixed(2) + ' ms';
-  const tr = row([el('td', new Date(d.evaluated_at).toLocaleTimeString('es-AR')), el('td', d.transaction_id, 'id'), el('td', d.channel),
-    el('td', d.amount_ars != null ? fmtMoney.format(d.amount_ars) : '—', 'num'), el('td', d.risk_score, 'num'), el('td', d.action, d.action),
-    el('td', (d.reason_codes.length ? d.reason_codes.join(', ') + ' — ' : '') + d.reasons.join(' · '), 'reasons')]);
-  tr.className = 'risk-' + d.action;
-  if (d.alert_id) { tr.classList.add('clickable'); tr.title = 'Ver alerta ' + d.alert_id; tr.onclick = () => { show('alerts'); openAlert(d.alert_id); }; }
-  const rows = $('live-rows'); rows.prepend(tr);
-  while (rows.children.length > 300) rows.lastChild.remove();
-};
-
-// --------------------------------------------------------------- alerts
-$('user').value = store.get('user') || '';
-$('user').addEventListener('change', () => store.set('user', $('user').value.trim()));
-$('a-filter').addEventListener('change', loadAlerts);
-let selectedAlert = null;
-
-async function loadAlerts() {
-  try {
-    const [stats, list] = await Promise.all([api('/v1/alerts/stats'),
-      api('/v1/alerts?limit=500' + ($('a-filter').value ? '&status=' + $('a-filter').value : ''))]);
-    const bs = stats.by_status || {};
-    $('a-open').textContent = fmtInt(bs.OPEN); $('a-review').textContent = fmtInt(bs.IN_REVIEW);
-    $('a-esc').textContent = fmtInt(bs.ESCALATED_COMPLIANCE); $('a-overdue').textContent = fmtInt(stats.overdue);
-    $('a-total').textContent = fmtInt(stats.total);
-    const open = (bs.OPEN || 0);
-    $('badge-open').hidden = !open; $('badge-open').textContent = open;
-    const tbody = $('alert-rows'); tbody.replaceChildren();
-    $('alerts-empty').hidden = list.length > 0;
-    const now = Date.now();
-    for (const a of list) {
-      const due = new Date(a.due_at);
-      const isOpen = ['OPEN','IN_REVIEW','ESCALATED_COMPLIANCE'].includes(a.status);
-      const dueCell = el('td', isOpen ? due.toLocaleString('es-AR', {dateStyle:'short', timeStyle:'short'}) : '—', 'nowrap' + (isOpen && due < now ? ' overdue' : ''));
-      const tr = row([el('td', a.alert_id, 'id'), el('td', a.severity, 'sev-' + a.severity), el('td', a.channel), el('td', a.customer_id || '—', 'id'),
-        el('td', a.risk_score, 'num'), el('td', a.action, a.action), el('td', STATUS_LABEL[a.status] || a.status), dueCell]);
-      tr.className = 'clickable' + (a.alert_id === selectedAlert ? ' selected' : '');
-      tr.onclick = () => openAlert(a.alert_id);
-      tbody.append(tr);
-    }
-  } catch (e) { $('alerts-empty').hidden = false; $('alerts-empty').textContent = 'No se pudieron cargar las alertas: ' + e.message; }
-}
-
-async function openAlert(id, message) {
-  selectedAlert = id;
-  document.querySelectorAll('#alert-rows tr').forEach(tr => tr.classList.toggle('selected', tr.firstChild.textContent === id));
-  const panel = $('alert-detail');
-  let a;
-  try { a = await api('/v1/alerts/' + encodeURIComponent(id)); }
-  catch (e) { panel.replaceChildren(el('div', e.message, 'msg err')); return; }
-  panel.replaceChildren();
-  panel.append(el('h2', 'Alerta ' + a.alert_id));
-  const dl = el('dl');
-  const add = (k, v, cls) => { dl.append(el('dt', k), el('dd', v, cls)); };
-  add('Estado', STATUS_LABEL[a.status] || a.status); add('Severidad', a.severity, 'sev-' + a.severity);
-  add('Categorías', a.categories.join(', ')); add('Transacción', a.transaction_id, 'id'); add('Canal', a.channel);
-  add('Cliente', a.customer_id || '—', 'id'); add('Decisión del motor', a.action, a.action); add('Score', a.risk_score);
-  add('Creada', new Date(a.created_at).toLocaleString('es-AR')); add('Vence (SLA)', new Date(a.due_at).toLocaleString('es-AR'));
-  add('Asignada a', a.assignee || '—');
-  panel.append(dl);
-  panel.append(el('strong', 'Motivos'));
-  const ul = el('ul'); a.reasons.forEach((r, i) => ul.append(el('li', (a.rule_ids[i] ? a.rule_ids[i] + ': ' : '') + r))); panel.append(ul);
-
-  const next = NEXT[a.status] || [];
-  if (next.length) {
-    const box = el('div', null, 'actions');
-    box.append(el('strong', 'Gestión'));
-    const ta = el('textarea'); ta.placeholder = 'Fundamento del análisis (obligatorio para cerrar o escalar)'; box.append(ta);
-    const btns = el('div', null, 'row');
-    for (const [to, label, cls] of next) {
-      const b = el('button', label, 'btn ' + cls);
-      b.onclick = async () => {
-        const user = $('user').value.trim();
-        if (!user) { showMsg('Completá "Tu usuario" arriba antes de gestionar la alerta.', true); $('user').focus(); return; }
-        try {
-          await api('/v1/alerts/' + encodeURIComponent(a.alert_id) + '/transition', {
-            method: 'POST', headers: {'Content-Type': 'application/json', 'X-User': user},
-            body: JSON.stringify({to_status: to, comment: ta.value}) });
-          await loadAlerts(); await openAlert(a.alert_id, ['Estado actualizado: ' + (STATUS_LABEL[to] || to), false]);
-        } catch (e) { showMsg(e.message, true); }
-      };
-      btns.append(b);
-    }
-    box.append(btns);
-    const msg = el('div', null, 'msg'); box.append(msg);
-    function showMsg(t, err) { msg.textContent = t; msg.className = 'msg ' + (err ? 'err' : 'ok'); }
-    if (message) showMsg(message[0], message[1]);
-    if (a.status === 'ESCALATED_COMPLIANCE') box.append(el('div', 'Principio de 4 ojos: debe resolverla un usuario distinto de quien la escaló.', 'muted'));
-    panel.append(box);
-  } else if (message) { panel.append(el('div', message[0], 'msg ok')); }
-
-  panel.append(el('strong', 'Historial'));
-  const h = el('div', null, 'history');
-  for (const ev of a.history) {
-    h.append(el('div', new Date(ev.at).toLocaleString('es-AR') + ' · ' + ev.user + ' → ' + (STATUS_LABEL[ev.to_status] || ev.to_status) + (ev.comment ? ' — "' + ev.comment + '"' : '')));
-  }
-  panel.append(h);
-}
-
-// ---------------------------------------------------------------- rules
-let rulesCache = null, ruleHits = {};
-async function loadRules() {
-  try {
-    const [rs, m] = await Promise.all([rulesCache ? Promise.resolve(rulesCache) : api('/v1/rules'), api('/v1/metrics')]);
-    rulesCache = rs; ruleHits = parseRuleHits(m.counters);
-    $('rs-version').textContent = rs.version;
-    renderRules();
-  } catch (e) { $('r-count').textContent = 'Error: ' + e.message; }
-}
-function renderRules() {
-  const q = $('r-search').value.toLowerCase(), ch = $('r-channel').value, cat = $('r-category').value;
-  const list = rulesCache.rules.filter(r => (!ch || r.channels.includes(ch)) && (!cat || r.category === cat) &&
-    (!q || (r.id + ' ' + r.name + ' ' + r.condition).toLowerCase().includes(q)));
-  $('r-count').textContent = list.length + ' de ' + rulesCache.rules.length + ' reglas';
-  const tbody = $('rule-rows'); tbody.replaceChildren();
-  for (const r of list) {
-    const tr = row([el('td', r.id, 'id'), el('td', r.name), el('td', r.channels.join(', ')), el('td', r.category),
-      el('td', r.severity, 'sev-' + r.severity), el('td', r.action, r.action), el('td', r.score, 'num'),
-      el('td', r.mode === 'shadow' ? 'sombra' : 'activa'), el('td', fmtInt(ruleHits[r.id]), 'num'),
-      el('td', r.condition, 'reasons'), el('td', r.regulatory_refs.join(', '), 'reasons')]);
-    tr.title = r.description || r.name;
-    tbody.append(tr);
-  }
-}
-['r-search','r-channel','r-category'].forEach(id => $(id).addEventListener('input', () => rulesCache && renderRules()));
-
-function parseRuleHits(counters) {
-  const out = {};
-  for (const [k, v] of Object.entries(counters)) {
-    const m = k.match(/^(?:shadow_)?rule_hits_total\|rule="([^"]+)"/); if (m) out[m[1]] = (out[m[1]] || 0) + v;
-  }
-  return out;
-}
-
-// -------------------------------------------------------------- metrics
-async function loadMetrics() {
-  try {
-    const m = await api('/v1/metrics');
-    $('m-p50').textContent = m.latency_ms.p50 + ' ms'; $('m-p95').textContent = m.latency_ms.p95 + ' ms'; $('m-p99').textContent = m.latency_ms.p99 + ' ms';
-    $('m-fail').textContent = fmtInt(m.counters.engine_failures_total); $('m-rerr').textContent = fmtInt(m.counters.rule_errors_total);
-    const ch = {};
-    for (const [k, v] of Object.entries(m.counters)) {
-      const x = k.match(/^decisions_total\|channel="([^"]+)",action="([^"]+)"/);
-      if (x) { ch[x[1]] = ch[x[1]] || {APPROVE:0, REVIEW:0, DECLINE:0}; ch[x[1]][x[2]] = v; }
-    }
-    const tb = $('m-channels'); tb.replaceChildren();
-    for (const [c, v] of Object.entries(ch)) {
-      const tot = v.APPROVE + v.REVIEW + v.DECLINE;
-      tb.append(row([el('td', c), el('td', fmtInt(v.APPROVE), 'num'), el('td', fmtInt(v.REVIEW), 'num'), el('td', fmtInt(v.DECLINE), 'num'),
-        el('td', tot ? (100 * v.DECLINE / tot).toFixed(1) + ' %' : '—', 'num')]));
-    }
-    if (!Object.keys(ch).length) tb.append(row([el('td', 'Sin datos todavía', 'muted')]));
-    const hits = Object.entries(parseRuleHits(m.counters)).sort((a, b) => b[1] - a[1]).slice(0, 15);
-    const max = hits.length ? hits[0][1] : 1;
-    const tr = $('m-rules'); tr.replaceChildren();
-    for (const [id, n] of hits) {
-      const bar = el('div', null, 'bar'); bar.style.width = (100 * n / max) + '%';
-      const cell = el('td'); cell.append(bar);
-      tr.append(row([el('td', id, 'id'), el('td', fmtInt(n), 'num'), cell]));
-    }
-    if (!hits.length) tr.append(row([el('td', 'Sin disparos todavía', 'muted')]));
-  } catch (e) { $('m-p50').textContent = 'Error'; }
-}
-
-// -------------------------------------------------------------- polling
-fetch('/health').then(r => r.json()).then(h => $('rs-version').textContent = h.ruleset_version).catch(() => {});
-setInterval(() => {
-  if (current === 'alerts') loadAlerts(); else api('/v1/alerts/stats').then(s => {
-    const open = (s.by_status || {}).OPEN || 0; $('badge-open').hidden = !open; $('badge-open').textContent = open; }).catch(() => {});
-  if (current === 'metrics') loadMetrics();
-}, 4000);
-show(current);
-</script>
+<script src="/static/console.js"></script>
 </body>
 </html>

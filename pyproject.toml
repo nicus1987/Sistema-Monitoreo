@@ -12,6 +12,7 @@ dependencies = [
   "uvicorn>=0.29",
   "pydantic>=2.6",
   "pyyaml>=6.0",
+  "ruamel.yaml>=0.18",  # edición de YAML conservando comentarios
   "tzdata>=2024.1",  # Windows no trae la base de husos horarios
 ]
 
@@ -28,4 +29,4 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 
 [tool.setuptools.package-data]
-monitoreo = ["api/static/*.html"]
+monitoreo = ["api/static/*.html", "api/static/*.css", "api/static/*.js"]

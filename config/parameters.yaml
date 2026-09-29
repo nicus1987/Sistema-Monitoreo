@@ -7,78 +7,81 @@
 # normativa UIF/BCRA al momento del despliegue y (c) el backtesting sobre
 # historia propia. Dado el contexto inflacionario, revisar al menos
 # trimestralmente y dejar constancia (gestión de cambios, Com. "A" 7724).
+#
+# Se pueden editar desde la consola (pestaña Parámetros): el comentario de cada
+# línea es la descripción que se muestra ahí.
 # ============================================================================
 
-timezone: America/Argentina/Buenos_Aires
-latency_budget_ms: 100          # SLA de respuesta síncrona del motor
-night_hours: [0, 6]             # franja horaria de mayor riesgo (hora local)
+timezone: America/Argentina/Buenos_Aires  # huso horario para calcular la hora local de la operación
+latency_budget_ms: 100          # tiempo máximo de respuesta esperado del motor (ms); si se excede se registra una métrica
+night_hours: [0, 6]             # franja nocturna de mayor riesgo: hora de inicio y de fin (hora local)
 
 # --- Montos generales -------------------------------------------------------
-high_amount_ars: 2000000        # operación de monto alto (revisión)
-very_high_amount_ars: 10000000  # operación de monto muy alto (rechazo/retención)
-round_base_ars: 100000          # múltiplo considerado "monto redondo"
-round_min_ars: 500000
+high_amount_ars: 2000000        # operación de monto alto: dispara revisión en varias reglas
+very_high_amount_ars: 10000000  # operación de monto muy alto: siempre se revisa (CMN-003)
+round_base_ars: 100000          # múltiplo que define un "monto redondo" (ej. 100.000, 200.000…)
+round_min_ars: 500000           # monto mínimo a partir del cual se evalúa si es redondo
 
 # --- Adquirencia ------------------------------------------------------------
-card_testing_max_amount_ars: 1000       # micro-montos típicos de testeo de tarjetas
-card_testing_min_attempts_1h: 5
-card_velocity_10m: 5
-card_velocity_1h: 10
-card_max_declines_1h: 3
-card_distinct_merchants_1h: 5
-card_daily_amount_ars: 5000000
-impossible_travel_kmh: 900
-merchant_ticket_ratio_max: 10           # ticket vs ticket promedio del comercio
-merchant_min_history: 20
-merchant_distinct_cards_1h: 50
-merchant_decline_ratio_max: 0.5
-merchant_new_days: 30
-merchant_new_daily_amount_ars: 20000000
-merchant_foreign_ratio_max: 0.6
+card_testing_max_amount_ars: 1000       # monto máximo considerado micro-operación (testeo de tarjetas robadas)
+card_testing_min_attempts_1h: 5         # micro-operaciones previas en 1 h para considerar testeo de tarjetas
+card_velocity_10m: 5                    # operaciones de una tarjeta en 10 min a partir de las cuales se rechaza (no presente)
+card_velocity_1h: 10                    # operaciones de una tarjeta en 1 h a partir de las cuales se revisa
+card_max_declines_1h: 3                 # rechazos de una tarjeta en 1 h a partir de los cuales se rechaza
+card_distinct_merchants_1h: 5           # comercios distintos en 1 h para una tarjeta no presente
+card_daily_amount_ars: 5000000          # monto diario máximo esperado por tarjeta
+impossible_travel_kmh: 900              # velocidad de desplazamiento imposible entre dos compras presenciales (km/h)
+merchant_ticket_ratio_max: 10           # cuántas veces el ticket promedio del comercio se considera anómalo
+merchant_min_history: 20                # operaciones mínimas del comercio para comparar contra su promedio
+merchant_distinct_cards_1h: 50          # tarjetas distintas en 1 h en un comercio (posible ataque de enumeración)
+merchant_decline_ratio_max: 0.5         # proporción de rechazos del comercio en 1 h (0 a 1) para sospechar ataque
+merchant_new_days: 30                   # días desde la adhesión para considerar a un comercio "nuevo"
+merchant_new_daily_amount_ars: 20000000 # volumen diario máximo esperado para un comercio nuevo
+merchant_foreign_ratio_max: 0.6         # proporción de tarjetas extranjeras en 1 h (0 a 1) considerada atípica
 
 # --- Cash-in / Cash-out -----------------------------------------------------
 # Umbral para detección de fraccionamiento (structuring). Ajustar al umbral de
 # reporte/control que la entidad utilice (ej. umbral de registración o de
 # requerimiento de documentación de origen de fondos).
-structuring_threshold_ars: 1000000
-structuring_band_pct: 0.10              # 10% por debajo del umbral
-structuring_min_count_7d: 3
+structuring_threshold_ars: 1000000      # umbral de control cuyo fraccionamiento se busca detectar
+structuring_band_pct: 0.10              # banda debajo del umbral considerada "cercana" (0 a 1; 0,10 = 10%)
+structuring_min_count_7d: 3             # operaciones cercanas al umbral en 7 días para sospechar fraccionamiento
 
-cash_deposit_high_ars: 5000000          # depósito en efectivo relevante
-cash_monthly_cap_ars: 20000000
-new_account_days: 30
-new_account_cashin_24h_ars: 3000000
-new_account_cashout_ars: 1000000
-cashout_daily_limit_ars: 15000000
-cashout_velocity_1h: 5
-passthrough_ratio: 0.9                  # >= 90% de lo ingresado sale en 24h
-passthrough_minutes: 60
-passthrough_min_cashin_ars: 300000
-fan_in_distinct_senders_24h: 10         # muchos originantes -> una cuenta (mula)
-fan_out_distinct_beneficiaries_24h: 8   # una cuenta -> muchos beneficiarios
-mule_counterparty_customers_24h: 5
-new_beneficiary_high_ars: 1500000
-profile_usage_ratio_review: 1.5         # uso > 150% del perfil (ingresos declarados)
-profile_usage_ratio_critical: 3.0
-amount_zscore_max: 4.0
-amount_to_avg_ratio_max: 8
-min_history_for_profile: 5
-device_distinct_subjects_24h: 3         # un dispositivo operando varios clientes
-ip_distinct_subjects_1h: 5
-new_device_session_seconds: 120         # sesión recién iniciada en dispositivo nuevo
+cash_deposit_high_ars: 5000000          # depósito en efectivo que requiere justificar origen de fondos
+cash_monthly_cap_ars: 20000000          # efectivo acumulado en 30 días considerado relevante
+new_account_days: 30                    # días desde la apertura para considerar una cuenta "nueva"
+new_account_cashin_24h_ars: 3000000     # ingresos en 24 h que son atípicos para una cuenta nueva
+new_account_cashout_ars: 1000000        # egreso relevante para una cuenta nueva o sin KYC
+cashout_daily_limit_ars: 15000000       # límite diario de egresos por cliente (se rechaza el excedente)
+cashout_velocity_1h: 5                  # egresos en 1 h a partir de los cuales se revisa
+passthrough_ratio: 0.9                  # proporción de lo ingresado en 24 h que sale (0 a 1) para sospechar cuenta puente
+passthrough_minutes: 60                 # minutos máximos entre el ingreso y el egreso en una cuenta puente
+passthrough_min_cashin_ars: 300000      # ingresos mínimos en 24 h para evaluar cuenta puente
+fan_in_distinct_senders_24h: 10         # originantes distintos en 24 h hacia una cuenta (cuenta recolectora)
+fan_out_distinct_beneficiaries_24h: 8   # beneficiarios distintos en 24 h desde una cuenta (dispersión)
+mule_counterparty_customers_24h: 5      # clientes propios distintos que operan con una misma contraparte en 24 h
+new_beneficiary_high_ars: 1500000       # monto relevante para una primera transferencia a un beneficiario
+profile_usage_ratio_review: 1.5         # veces el ingreso mensual declarado a partir de las cuales se revisa (1,5 = 150%)
+profile_usage_ratio_critical: 3.0       # veces el ingreso mensual declarado considerado crítico
+amount_zscore_max: 4.0                  # desvíos estándar respecto del promedio del cliente para considerar atípico
+amount_to_avg_ratio_max: 8              # veces el monto promedio del cliente para considerar atípico
+min_history_for_profile: 5              # operaciones mínimas en 90 días para comparar contra el histórico
+device_distinct_subjects_24h: 3         # clientes distintos operando desde un mismo dispositivo en 24 h
+ip_distinct_subjects_1h: 5              # clientes distintos operando desde una misma IP en 1 h
+new_device_session_seconds: 120         # sesión "recién iniciada" en un dispositivo nuevo (segundos)
 
 # --- Política de decisión por canal (score 0-100, combinación noisy-OR) ----
-decision_thresholds:
+decision_thresholds:  # score combinado a partir del cual se revisa o se rechaza en cada canal
   ACQUIRING: {review: 60, decline: 85}
   CASH_IN:   {review: 50, decline: 90}
   CASH_OUT:  {review: 50, decline: 80}
 
 # --- Contingencia ante falla del motor (plan de continuidad) ----------------
-fallback:
+fallback:  # si el motor falla: se aprueba por debajo del monto indicado y el resto recibe la acción "otherwise"
   ACQUIRING: {approve_below_ars: 50000,  otherwise: DECLINE}
   CASH_IN:   {approve_below_ars: 1000000, otherwise: REVIEW}
   CASH_OUT:  {approve_below_ars: 100000, otherwise: REVIEW}
 
 # --- Parámetros adicionales -------------------------------------------------
-cashin_velocity_1h: 10
-cashout_max_declines_24h: 3
+cashin_velocity_1h: 10                  # ingresos en 1 h a partir de los cuales se revisa
+cashout_max_declines_24h: 3             # egresos rechazados en 24 h a partir de los cuales se rechaza

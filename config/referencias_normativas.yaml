@@ -1,0 +1,21 @@
+# Códigos de referencia normativa que pueden asignarse a las reglas.
+# Detalle y alcance de cada uno en docs/marco_normativo.md (un test verifica
+# que ambos listados coincidan).
+references:
+  LEY-25246: Ley 25.246 — Encubrimiento y Lavado de Activos (ROS, confidencialidad)
+  LEY-26734: Ley 26.734 — Financiamiento del Terrorismo
+  DEC-918-2012: Decreto 918/2012 — Congelamiento administrativo de bienes (FT)
+  UIF-FT: Resoluciones UIF sobre reporte de FT y congelamiento
+  UIF-EEFF: Resolución UIF para Entidades Financieras y Cambiarias
+  UIF-PSP: Resolución UIF para Proveedores de Servicios de Pago (cuentas de pago)
+  UIF-PEP: Resolución UIF sobre Personas Expuestas Políticamente
+  BCRA-A7724: Com. "A" 7724 — Gestión de riesgos de TI y seguridad de la información
+  BCRA-PUSF: BCRA — Protección de los usuarios de servicios financieros
+  BCRA-TRANSF: BCRA — Sistema Nacional de Pagos, Transferencias
+  PCI-DSS: PCI Data Security Standard
+  GAFI-R1: GAFI Rec. 1 — Enfoque basado en riesgo
+  GAFI-R6: GAFI Rec. 6 — Sanciones financieras dirigidas (terrorismo)
+  GAFI-R10: GAFI Rec. 10 — Debida diligencia del cliente
+  GAFI-R12: GAFI Rec. 12 — Personas Expuestas Políticamente
+  GAFI-R19: GAFI Rec. 19 — Países de mayor riesgo
+  GAFI-R20: GAFI Rec. 20 — Reporte de operaciones sospechosas

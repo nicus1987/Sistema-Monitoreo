@@ -23,6 +23,13 @@ from .expression import CompiledExpression, ExpressionError
 log = logging.getLogger(__name__)
 
 ROOTS = {"txn", "feat", "p"}
+
+
+def format_number(v: float) -> str:
+    """Formato argentino: 4.000.000 / 4.000.000,50 / 4,99."""
+    if isinstance(v, float) and not v.is_integer():
+        return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"{int(v):,}".replace(",", ".")
 _PLACEHOLDER = re.compile(r"\{([^{}]+)\}")
 
 
@@ -66,6 +73,7 @@ class Rule:
     regulatory_refs: list[str] = field(default_factory=list)
     reason_parts: list[tuple[str, CompiledExpression]] = field(default_factory=list)
     owner: str = "Prevención de Fraude"
+    source: str = ""
 
     def applies_to(self, channel: Channel) -> bool:
         return self.enabled and channel in self.channels
@@ -77,8 +85,8 @@ class Rule:
                 value = expr.evaluate(context)
             except Exception:  # noqa: BLE001
                 value = "?"
-            if isinstance(value, float):
-                value = f"{value:,.2f}"
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                value = format_number(value)
             text = text.replace("{" + placeholder + "}", str(value))
         return text
 
@@ -147,6 +155,7 @@ class RuleSet:
                 enabled=bool(item.get("enabled", True)),
                 regulatory_refs=list(item.get("regulatory_refs", [])),
                 owner=item.get("owner", "Prevención de Fraude"),
+                source=source,
             )
         except KeyError as exc:
             raise RuleSetError(f"{source}: falta el campo obligatorio {exc} en regla {item.get('id', '?')}") from exc

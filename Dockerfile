@@ -8,7 +8,8 @@ RUN pip install --no-cache-dir ".[kafka]"
 ENV MONITOREO_CONFIG_DIR=/app/config \
     MONITOREO_AUDIT_PATH=/data/audit/decisions.jsonl \
     PORT=8000
-RUN mkdir -p /data/audit && chown -R app /data
+# config/ debe ser escribible: la consola edita reglas y parámetros
+RUN mkdir -p /data/audit && chown -R app /data /app/config
 USER app
 EXPOSE 8000
 HEALTHCHECK CMD python -c "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"

@@ -1,6 +1,6 @@
 # Catálogo de reglas
 
-Generado automáticamente desde `config/rules/` — versión del ruleset `e407bad72d55`, 64 reglas. No editar a mano: ejecutar `python scripts/generar_catalogo.py`.
+Generado automáticamente desde `config/rules/` — versión del ruleset `c17f3e24eded`, 64 reglas. No editar a mano: ejecutar `python scripts/generar_catalogo.py`.
 
 Decisión final = acción más severa entre (a) la acción de cada regla activa disparada y (b) el score combinado (noisy-OR) contra los umbrales del canal:
 

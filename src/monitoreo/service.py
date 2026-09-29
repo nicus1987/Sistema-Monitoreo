@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import threading
 import time
 import zlib
-from collections import OrderedDict, defaultdict
+from datetime import datetime, timezone
+from collections import OrderedDict, defaultdict, deque
 from pathlib import Path
 from typing import Any, Callable
 
@@ -15,7 +17,8 @@ import yaml
 
 from .alerts import AlertManager
 from .audit import AuditLog
-from .engine.rules import RuleSet, evaluate_rules
+from .config_editor import ConfigEditor, RuleInput
+from .engine.rules import Rule, RuleSet, build_functions, evaluate_rules
 from .features.extractor import FeatureExtractor
 from .features.store import BehaviorStore, InMemoryBehaviorStore
 from .lists import ListManager
@@ -24,6 +27,10 @@ from .models import Action, Channel, Decision, RuleHit, Transaction
 log = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_DIR = Path(os.getenv("MONITOREO_CONFIG_DIR") or Path(__file__).resolve().parents[2] / "config")
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def combine_scores(hits: list[RuleHit]) -> int:
@@ -79,6 +86,7 @@ class MonitoringService:
         config_dir: str | Path = DEFAULT_CONFIG_DIR,
         store: BehaviorStore | None = None,
         audit_path: str | Path | None = None,
+        recent_buffer: int = 5000,
     ):
         self.config_dir = Path(config_dir)
         self.store = store or InMemoryBehaviorStore()
@@ -90,6 +98,9 @@ class MonitoringService:
         self._reload_lock = threading.Lock()
         self._idempotency: OrderedDict[str, Decision] = OrderedDict()
         self._idem_lock = threading.Lock()
+        # Evaluaciones recientes para probar reglas y parámetros antes de activarlos
+        self._recent: deque[dict[str, Any]] = deque(maxlen=recent_buffer)
+        self.editor = ConfigEditor(self.config_dir)
         self.reload()
 
     # ----------------------------------------------------------- config
@@ -97,9 +108,14 @@ class MonitoringService:
         """Recarga parámetros, listas y reglas de forma atómica. Si algo es
         inválido, se mantiene la configuración anterior (no se degrada)."""
         with self._reload_lock:
-            params = yaml.safe_load((self.config_dir / "parameters.yaml").read_text(encoding="utf-8"))
+            params_raw = (self.config_dir / "parameters.yaml").read_bytes()
+            params = yaml.safe_load(params_raw)
             lists = ListManager.from_directory(self.config_dir / "lists")
             ruleset = RuleSet.load(self.config_dir / "rules", lists)
+            # La versión identifica la configuración completa (reglas + parámetros + listas):
+            # cada decisión queda asociada a la configuración exacta que la produjo.
+            ruleset.version = hashlib.sha256(
+                ruleset.version.encode() + params_raw + lists.version.encode()).hexdigest()[:12]
             self.params, self.lists, self.ruleset = params, lists, ruleset
             self.extractor = FeatureExtractor(self.store, params)
         info = {"ruleset_version": ruleset.version, "rules": len(ruleset.rules), "lists": lists.summary()}
@@ -157,6 +173,9 @@ class MonitoringService:
                 self.metrics.inc("rule_errors_total", len(result.errors))
                 features["_rule_errors"] = result.errors
             action, score = self._decide(txn.channel, result.hits)
+            self._recent.append({"transaction_id": txn.transaction_id, "channel": txn.channel,
+                                 "amount_ars": txn.amount_ars, "txn": context["txn"], "feat": dict(features),
+                                 "action": action, "score": score, "hits": result.hits})
             decision = Decision(
                 transaction_id=txn.transaction_id,
                 channel=txn.channel,
@@ -189,9 +208,10 @@ class MonitoringService:
         })
         return decision
 
-    def _decide(self, channel: Channel, hits: list[RuleHit]) -> tuple[Action, int]:
+    def _decide(self, channel: Channel, hits: list[RuleHit],
+                params: dict[str, Any] | None = None) -> tuple[Action, int]:
         score = combine_scores(hits)
-        thresholds = self.params["decision_thresholds"][channel.value]
+        thresholds = (params or self.params)["decision_thresholds"][channel.value]
         action = max((h.action for h in hits), key=lambda a: a.weight, default=Action.APPROVE)
         if score >= thresholds["decline"]:
             by_score = Action.DECLINE
@@ -229,3 +249,149 @@ class MonitoringService:
             self._idempotency[decision.transaction_id] = decision
             while len(self._idempotency) > 100_000:
                 self._idempotency.popitem(last=False)
+
+    # ================================================ gestión de reglas
+    def compile_draft(self, rule: RuleInput) -> Rule:
+        """Compila una regla borrador (sin guardarla) para probarla."""
+        item = rule.model_dump(mode="json")
+        item["reason"] = item["reason"] or item["name"]
+        return RuleSet._parse(item, build_functions(self.lists), "borrador")
+
+    def _hit(self, rule: Rule, context: dict[str, Any]) -> RuleHit | None:
+        try:
+            if not rule.condition.evaluate(context):
+                return None
+        except Exception:  # noqa: BLE001
+            return None
+        return RuleHit(rule_id=rule.id, name=rule.name, category=rule.category, severity=rule.severity,
+                       action=rule.action, score=rule.score, mode=rule.mode,
+                       reason=rule.render_reason(context), regulatory_refs=rule.regulatory_refs)
+
+    def backtest_rule(self, rule: Rule, replace_id: str | None = None, samples: int = 25) -> dict[str, Any]:
+        """Aplica la regla sobre las evaluaciones recientes y mide cuántas
+        dispararía y cómo cambiarían las decisiones si estuviera ACTIVA."""
+        records = [r for r in list(self._recent) if r["channel"] in rule.channels]
+        before = {a.value: 0 for a in Action}
+        after = {a.value: 0 for a in Action}
+        by_channel: dict[str, dict[str, int]] = {}
+        matches, changed, sample_rows = 0, 0, []
+        for r in records:
+            ctx = {"txn": r["txn"], "feat": r["feat"], "p": self.params}
+            hit = self._hit(rule, ctx)
+            base = [h for h in r["hits"] if h.rule_id != (replace_id or rule.id)]
+            base_action, base_score = self._decide(r["channel"], base)
+            new_hits = base + ([hit.model_copy(update={"mode": "active"})] if hit else [])
+            new_action, new_score = self._decide(r["channel"], new_hits)
+            ch = by_channel.setdefault(r["channel"].value, {"evaluated": 0, "matched": 0})
+            ch["evaluated"] += 1
+            before[base_action.value] += 1
+            after[new_action.value] += 1
+            if hit:
+                matches += 1
+                ch["matched"] += 1
+                if new_action != base_action:
+                    changed += 1
+                if len(sample_rows) < samples:
+                    sample_rows.append({
+                        "transaction_id": r["transaction_id"], "channel": r["channel"].value,
+                        "amount_ars": r["amount_ars"], "reason": hit.reason,
+                        "before": base_action.value, "after": new_action.value,
+                        "score_before": base_score, "score_after": new_score,
+                        "other_rules": [h.rule_id for h in base],
+                    })
+        return {
+            "evaluated": len(records), "matched": matches,
+            "match_rate": round(100 * matches / len(records), 2) if records else 0.0,
+            "changed": changed, "by_channel": by_channel,
+            "decisions_before": before, "decisions_after": after, "samples": sample_rows,
+            "buffer_size": len(self._recent),
+        }
+
+    def test_transaction(self, rule: Rule, txn: Transaction) -> dict[str, Any]:
+        """Evalúa la regla contra una transacción puntual, con la historia real
+        del cliente/tarjeta pero SIN registrarla ni generar alertas."""
+        features = self.extractor.extract(txn)
+        ctx = {"txn": txn.model_dump(mode="json"), "feat": features, "p": self.params}
+        applies = txn.channel in rule.channels
+        hit = self._hit(rule, ctx) if applies else None
+        current = evaluate_rules(self.ruleset, txn.channel, ctx)
+        base = [h for h in current.hits if h.rule_id != rule.id]
+        base_action, base_score = self._decide(txn.channel, base)
+        new_action, new_score = self._decide(txn.channel, base + ([hit] if hit else []))
+        return {
+            "applies_to_channel": applies, "matched": hit is not None,
+            "reason": hit.reason if hit else None,
+            "decision_without_rule": {"action": base_action.value, "score": base_score, "rules": [h.rule_id for h in base]},
+            "decision_with_rule": {"action": new_action.value, "score": new_score},
+            "features": features,
+        }
+
+    def preview_params(self, changes: dict[str, Any], samples: int = 25) -> dict[str, Any]:
+        """Re-evalúa las operaciones recientes con parámetros modificados y
+        compara contra los parámetros actuales."""
+        from .features.catalog import FEATURE_PARAMS
+
+        new_params = self.editor.preview_params(changes, self.params)
+        rules = [r for r in self.ruleset.rules if r.enabled and r.mode == "active"]
+        before = {a.value: 0 for a in Action}
+        after = {a.value: 0 for a in Action}
+        changed, rows = 0, []
+        hit_delta: dict[str, int] = {}
+        records = list(self._recent)
+        for r in records:
+            results = []
+            for params in (self.params, new_params):
+                ctx = {"txn": r["txn"], "feat": r["feat"], "p": params}
+                hits = [h for rule in rules if r["channel"] in rule.channels for h in [self._hit(rule, ctx)] if h]
+                results.append((hits, *self._decide(r["channel"], hits, params)))
+            (h0, a0, s0), (h1, a1, s1) = results
+            before[a0.value] += 1
+            after[a1.value] += 1
+            ids0, ids1 = {h.rule_id for h in h0}, {h.rule_id for h in h1}
+            for rid in ids1 - ids0:
+                hit_delta[rid] = hit_delta.get(rid, 0) + 1
+            for rid in ids0 - ids1:
+                hit_delta[rid] = hit_delta.get(rid, 0) - 1
+            if a0 != a1:
+                changed += 1
+                if len(rows) < samples:
+                    rows.append({"transaction_id": r["transaction_id"], "channel": r["channel"].value,
+                                 "amount_ars": r["amount_ars"], "before": a0.value, "after": a1.value,
+                                 "score_before": s0, "score_after": s1,
+                                 "rules_added": sorted(ids1 - ids0), "rules_removed": sorted(ids0 - ids1)})
+        return {
+            "evaluated": len(records), "changed": changed,
+            "decisions_before": before, "decisions_after": after,
+            "rule_hit_delta": dict(sorted(hit_delta.items(), key=lambda kv: -abs(kv[1]))),
+            "samples": rows,
+            "approximate": sorted(set(changes) & FEATURE_PARAMS | {c for c in changes if c.split(".")[0] in FEATURE_PARAMS}),
+        }
+
+    def create_rule(self, rule: RuleInput, user: str) -> dict[str, Any]:
+        result = self.editor.create_rule(rule, self.params)
+        info = self.reload()
+        self.audit.append("RULE_CREATED", {"at": _now(), "user": user, "rule_id": rule.id, **result, **info})
+        return {**result, **info}
+
+    def update_rule(self, rule_id: str, rule: RuleInput, user: str) -> dict[str, Any]:
+        result = self.editor.update_rule(rule_id, rule, self.params)
+        info = self.reload()
+        self.audit.append("RULE_UPDATED", {"at": _now(), "user": user, "rule_id": rule_id, **result, **info})
+        return {**result, **info}
+
+    def delete_rule(self, rule_id: str, user: str) -> dict[str, Any]:
+        result = self.editor.delete_rule(rule_id, self.params)
+        info = self.reload()
+        self.audit.append("RULE_DELETED", {"at": _now(), "user": user, "rule_id": rule_id, **result, **info})
+        return {**result, **info}
+
+    def update_params(self, changes: dict[str, Any], user: str) -> dict[str, Any]:
+        result = self.editor.update_params(changes)
+        info = self.reload()
+        self.audit.append("PARAMS_UPDATED", {"at": _now(), "user": user, **result, **info})
+        return {**result, **info}
+
+    def change_history(self, limit: int = 100) -> list[dict[str, Any]]:
+        kinds = {"RULE_CREATED", "RULE_UPDATED", "RULE_DELETED", "PARAMS_UPDATED"}
+        items = [r["payload"] | {"type": r["type"]} for r in self.audit.records() if r["type"] in kinds]
+        return list(reversed(items))[:limit]

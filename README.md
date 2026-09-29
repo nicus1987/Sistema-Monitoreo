@@ -39,7 +39,9 @@ http://localhost:8000 y envía tráfico de prueba con escenarios de fraude.
 |---|---|
 | **Tiempo real** | Cada transacción evaluada al instante, con decisión, score y motivos. Filtro para ver sólo las riesgosas; clic en una fila para ir a su alerta. |
 | **Alertas** | Bandeja del analista ordenada por severidad y SLA. Tomar, cerrar (falso positivo / fraude confirmado), escalar a Cumplimiento y registrar ROS, con fundamento obligatorio y 4 ojos. |
-| **Reglas** | Catálogo vigente con búsqueda, condición, normativa y cantidad de disparos. |
+| **Reglas** | Consola de reglas: explicación en lenguaje natural de cada regla, edición, creación de reglas nuevas, prueba sobre el tráfico reciente o sobre una transacción puntual, y activación (sombra → activa). |
+| **Parámetros** | Todos los umbrales con su descripción y las reglas que los usan. Vista previa del impacto sobre las decisiones antes de guardar. |
+| **Historial de cambios** | Quién cambió qué regla o parámetro, cuándo, valor anterior y nuevo, y la versión resultante. |
 | **Métricas** | Latencia, decisiones y % de rechazo por canal, reglas más disparadas, fallas del motor. |
 
 ![Tiempo real](docs/dashboard.png)
@@ -71,9 +73,9 @@ curl -s localhost:8000/v1/transactions/evaluate -H 'Content-Type: application/js
 ```json
 {"transaction_id": "TX-0001", "action": "DECLINE", "risk_score": 97,
  "reason_codes": ["COUT-002", "COUT-003", "COUT-004"],
- "reasons": ["Cuenta de 9.48 días egresa ARS 2,000,000.00",
-             "Primera transferencia a CVU-DEST-1 por ARS 2,000,000.00",
-             "Dispositivo nuevo, beneficiario nuevo y sesión de 40.00s"],
+ "reasons": ["Cuenta de 9,48 días egresa ARS 2.000.000",
+             "Primera transferencia a CVU-DEST-1 por ARS 2.000.000",
+             "Dispositivo nuevo, beneficiario nuevo y sesión de 40s"],
  "alert_id": "ALR-6CA13D655A49", "ruleset_version": "e407bad72d55", "latency_ms": 1.07, "fallback": false}
 ```
 
@@ -120,6 +122,14 @@ docs/
 | GET | `/v1/alerts`, `/v1/alerts/{id}`, `/v1/alerts/stats` | Bandeja de alertas |
 | POST | `/v1/alerts/{id}/transition` | Tomar / cerrar / escalar / ROS (cabecera `X-User`) |
 | GET | `/v1/stream/decisions` | Decisiones en vivo (Server-Sent Events) |
+| GET | `/v1/rules/catalog` | Variables, parámetros, listas, funciones y referencias para escribir reglas |
+| POST | `/v1/rules/explain` | Explica una condición en lenguaje natural |
+| POST | `/v1/rules/backtest` | Prueba una regla borrador sobre las evaluaciones recientes |
+| POST | `/v1/rules/test` | Prueba una regla borrador contra una transacción (sin registrarla) |
+| POST / PUT / DELETE | `/v1/rules`, `/v1/rules/{id}` | Crear, modificar, eliminar reglas (admin, auditado) |
+| GET / PUT | `/v1/params` | Consultar / modificar parámetros (admin, auditado) |
+| POST | `/v1/params/preview` | Impacto estimado de un cambio de parámetros |
+| GET | `/v1/config/history` | Historial de cambios de reglas y parámetros |
 | POST | `/v1/admin/reload` | Recarga atómica de reglas, listas y parámetros (admin) |
 | GET | `/v1/audit/verify` | Verifica integridad de la cadena de auditoría (admin) |
 | GET | `/metrics`, `/health` | Prometheus y salud |
@@ -129,6 +139,26 @@ Autenticación: variables `MONITOREO_API_KEYS` (sistemas cliente) y `MONITOREO_A
 configuradas la API corre en modo desarrollo (se registra una advertencia).
 
 ## Agregar o modificar una regla
+
+### Desde la consola (recomendado)
+
+1. Pestaña **Reglas** → **+ Nueva regla** (o clic en una regla existente para editarla).
+2. Escribí la condición con ayuda del botón **"Ayuda: insertar variables…"**: lista todas las variables
+   disponibles con su explicación. Mientras escribís, el recuadro **"¿Qué hace esta regla?"** la traduce
+   a lenguaje natural.
+3. **Probar con tráfico reciente**: muestra cuántas de las últimas operaciones habría marcado y cómo
+   cambiarían las decisiones. **Probar con una transacción**: evalúa un caso puntual sin registrarlo.
+4. Guardala en modo **Sombra**: se evalúa en producción sin afectar decisiones. Cuando confirmes que
+   funciona, cambiá el estado a **Activa**.
+
+Cada cambio se valida antes de guardarse (sintaxis, parámetros y listas existentes, referencia
+normativa), se aplica sin reiniciar y queda en el **Historial de cambios**. Las reglas creadas en la
+consola se guardan en `config/rules/90_consola.yaml`; las del catálogo base no se eliminan, se desactivan.
+
+![Consola de reglas](docs/consola_reglas.png)
+![Parámetros con vista previa de impacto](docs/consola_parametros.png)
+
+### Editando los archivos YAML
 
 ```yaml
 - id: COUT-099

@@ -12,10 +12,15 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from ..alerts import AlertStatus, TransitionError
+from ..config_editor import ConfigError, RuleInput, load_reference_codes
+from ..engine.explain import Explainer, references
+from ..engine.expression import ExpressionError
 from ..engine.rules import RuleSetError
+from ..features.catalog import FEATURE_PARAMS, catalog
 from ..models import Decision, Transaction
 from ..service import MonitoringService
 
@@ -72,6 +77,24 @@ def to_response(d: Decision, include_features: bool) -> DecisionResponse:
     )
 
 
+class DraftRequest(BaseModel):
+    rule: RuleInput
+    existing_id: str | None = None
+
+
+class TestRequest(BaseModel):
+    rule: RuleInput
+    transaction: Transaction
+
+
+class ExplainRequest(BaseModel):
+    condition: str
+
+
+class ParamsRequest(BaseModel):
+    changes: dict[str, Any]
+
+
 class TransitionRequest(BaseModel):
     to_status: AlertStatus
     comment: str = ""
@@ -92,6 +115,7 @@ def create_app(service: MonitoringService | None = None) -> FastAPI:
         version="0.1.0",
     )
     app.state.service = service
+    app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
     # ------------------------------------------------------- evaluación
     @app.post("/v1/transactions/evaluate", response_model=DecisionResponse, dependencies=[Depends(require_client)])
@@ -106,19 +130,133 @@ def create_app(service: MonitoringService | None = None) -> FastAPI:
         return [to_response(service.evaluate(t), False) for t in txns]
 
     # ------------------------------------------------------------ reglas
+    def rule_dict(r) -> dict[str, Any]:
+        try:
+            explanation = Explainer(service.params).explain(r.condition.source)["text"]
+        except Exception:  # noqa: BLE001
+            explanation = ""
+        return {
+            "id": r.id, "name": r.name, "description": r.description,
+            "channels": [c.value for c in r.channels], "category": r.category.value,
+            "severity": r.severity.value, "action": r.action.value, "score": r.score,
+            "mode": r.mode, "enabled": r.enabled, "condition": " ".join(r.condition.source.split()),
+            "reason": r.reason_template, "regulatory_refs": r.regulatory_refs, "owner": r.owner,
+            "source": r.source, "deletable": r.source == "90_consola.yaml", "explanation": explanation,
+        }
+
+    def config_error(exc: Exception) -> HTTPException:
+        return HTTPException(422, str(exc))
+
     @app.get("/v1/rules", dependencies=[Depends(require_client)])
     def list_rules() -> dict[str, Any]:
         rs = service.ruleset
+        return {"version": rs.version, "rules": [rule_dict(r) for r in rs.rules]}
+
+    @app.get("/v1/rules/catalog", dependencies=[Depends(require_client)])
+    def rules_catalog() -> dict[str, Any]:
+        """Todo lo necesario para escribir una regla: variables, parámetros,
+        listas, funciones y referencias normativas."""
         return {
-            "version": rs.version,
-            "rules": [{
-                "id": r.id, "name": r.name, "description": r.description,
-                "channels": [c.value for c in r.channels], "category": r.category.value,
-                "severity": r.severity.value, "action": r.action.value, "score": r.score,
-                "mode": r.mode, "enabled": r.enabled, "condition": r.condition.source.strip(),
-                "regulatory_refs": r.regulatory_refs, "owner": r.owner,
-            } for r in rs.rules],
+            **catalog(),
+            "params": {k: v for k, v in service.params.items() if not isinstance(v, dict)},
+            "lists": service.lists.summary(),
+            "regulatory_refs": load_reference_codes(service.config_dir),
+            "channels": ["ACQUIRING", "CASH_IN", "CASH_OUT"],
+            "categories": ["FRAUD", "AML", "CFT", "OPERATIONAL"],
+            "severities": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+            "actions": ["APPROVE", "REVIEW", "DECLINE"],
+            "recent_evaluations": len(service._recent),
         }
+
+    @app.post("/v1/rules/explain", dependencies=[Depends(require_client)])
+    def explain(body: ExplainRequest) -> dict[str, Any]:
+        try:
+            return Explainer(service.params).explain(body.condition)
+        except SyntaxError as exc:
+            raise HTTPException(422, f"Sintaxis inválida: {exc.msg}") from exc
+
+    @app.post("/v1/rules/validate", dependencies=[Depends(require_client)])
+    def validate_rule(body: DraftRequest) -> dict[str, Any]:
+        try:
+            service.editor.validate_rule(body.rule, service.params, body.existing_id)
+        except (ConfigError, RuleSetError, ExpressionError) as exc:
+            raise config_error(exc) from exc
+        return {"valid": True, "explanation": Explainer(service.params).explain(body.rule.condition)}
+
+    @app.post("/v1/rules/backtest", dependencies=[Depends(require_client)])
+    def backtest_rule(body: DraftRequest) -> dict[str, Any]:
+        try:
+            draft = service.compile_draft(body.rule)
+        except (RuleSetError, ExpressionError, ValueError) as exc:
+            raise config_error(exc) from exc
+        missing = [x for x in references(body.rule.condition)["params"] if x not in service.params]
+        if missing:
+            raise HTTPException(422, "Parámetro inexistente: " + ", ".join("p." + m for m in missing))
+        return service.backtest_rule(draft, replace_id=body.existing_id)
+
+    @app.post("/v1/rules/test", dependencies=[Depends(require_client)])
+    def test_rule(body: TestRequest) -> dict[str, Any]:
+        try:
+            draft = service.compile_draft(body.rule)
+        except (RuleSetError, ExpressionError, ValueError) as exc:
+            raise config_error(exc) from exc
+        return service.test_transaction(draft, body.transaction)
+
+    @app.post("/v1/rules", dependencies=[Depends(require_admin)], status_code=201)
+    def create_rule(rule: RuleInput, x_user: str = Header(default="consola")) -> dict[str, Any]:
+        try:
+            return service.create_rule(rule, x_user)
+        except (ConfigError, RuleSetError) as exc:
+            raise config_error(exc) from exc
+
+    @app.put("/v1/rules/{rule_id}", dependencies=[Depends(require_admin)])
+    def update_rule(rule_id: str, rule: RuleInput, x_user: str = Header(default="consola")) -> dict[str, Any]:
+        try:
+            return service.update_rule(rule_id, rule, x_user)
+        except (ConfigError, RuleSetError) as exc:
+            raise config_error(exc) from exc
+
+    @app.delete("/v1/rules/{rule_id}", dependencies=[Depends(require_admin)])
+    def delete_rule(rule_id: str, x_user: str = Header(default="consola")) -> dict[str, Any]:
+        try:
+            return service.delete_rule(rule_id, x_user)
+        except (ConfigError, RuleSetError) as exc:
+            raise config_error(exc) from exc
+
+    # -------------------------------------------------------- parámetros
+    @app.get("/v1/params", dependencies=[Depends(require_client)])
+    def list_params() -> list[dict[str, Any]]:
+        usage: dict[str, list[str]] = {}
+        for r in service.ruleset.rules:
+            for name in references(r.condition.source)["params"]:
+                usage.setdefault(name, []).append(r.id)
+        items = service.editor.describe_params()
+        for item in items:
+            root = item["name"].split(".")[0]
+            item["used_by"] = usage.get(item["name"], [])
+            item["affects_features"] = root in FEATURE_PARAMS
+            item["affects_decision"] = root in ("decision_thresholds", "fallback")
+        return items
+
+    @app.post("/v1/params/preview", dependencies=[Depends(require_client)])
+    def preview_params(body: ParamsRequest) -> dict[str, Any]:
+        try:
+            return service.preview_params(body.changes)
+        except ConfigError as exc:
+            raise config_error(exc) from exc
+
+    @app.put("/v1/params", dependencies=[Depends(require_admin)])
+    def update_params(body: ParamsRequest, x_user: str = Header(default="consola")) -> dict[str, Any]:
+        if not body.changes:
+            raise HTTPException(422, "No hay cambios")
+        try:
+            return service.update_params(body.changes, x_user)
+        except (ConfigError, RuleSetError) as exc:
+            raise config_error(exc) from exc
+
+    @app.get("/v1/config/history", dependencies=[Depends(require_client)])
+    def config_history(limit: int = Query(100, le=1000)) -> list[dict[str, Any]]:
+        return service.change_history(limit)
 
     @app.post("/v1/admin/reload", dependencies=[Depends(require_admin)])
     def reload(x_user: str = Header(default="admin")) -> dict[str, Any]:
