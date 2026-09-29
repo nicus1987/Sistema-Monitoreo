@@ -1,0 +1,26 @@
+# Listas de control. En producción se sincronizan por job batch desde las
+# fuentes oficiales (con control de versión y evidencia de actualización).
+# Los valores de ejemplo son FICTICIOS, sólo para pruebas.
+version: "2026-09-29-demo"
+lists:
+  # RePET + Consejo de Seguridad ONU (Decreto 918/2012 / Ley 26.734). CUITs ficticios.
+  sanctions:
+    - "20-99999999-1"
+    - "30-99999999-7"
+  # Listas negras internas: cuentas (CBU/CVU hasheados) confirmadas como mula
+  mule_accounts:
+    - "CVU-MULA-0001"
+    - "CBU-MULA-0002"
+  blocked_devices:
+    - "DEV-FRAUDE-001"
+  blocked_merchants:
+    - "MER-BLOCKED-001"
+  # BINs (o prefijos) comprometidos informados por marcas/emisores
+  blocked_bins:
+    - "999999"
+  # Contrapartes de confianza que legítimamente operan con muchos clientes
+  # (empleadores que pagan haberes, recaudadores de servicios, organismos).
+  # Alta con aprobación de Cumplimiento y revisión periódica.
+  trusted_counterparties:
+    - "CBU-EMPLEADOR-DEMO"
+    - "CVU-SERVICIO-PUBLICO-DEMO"

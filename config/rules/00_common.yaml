@@ -1,0 +1,44 @@
+# Reglas transversales a todos los canales.
+# Campos: id, name, description, channels, category (FRAUD|AML|CFT|OPERATIONAL),
+# severity (LOW|MEDIUM|HIGH|CRITICAL), action (APPROVE|REVIEW|DECLINE),
+# score (0-100), condition (expresión), reason (plantilla con {expr}),
+# mode (active|shadow), enabled, regulatory_refs, owner.
+rules:
+  - id: CMN-001
+    name: Cliente en listas de sanciones / terrorismo
+    description: >
+      El CUIT del cliente figura en RePET o listas del Consejo de Seguridad ONU.
+      Se rechaza y se genera alerta CRÍTICA para el Oficial de Cumplimiento
+      (evaluar congelamiento administrativo y ROS de FT sin demora).
+    channels: [ACQUIRING, CASH_IN, CASH_OUT]
+    category: CFT
+    severity: CRITICAL
+    action: DECLINE
+    score: 100
+    condition: in_list('sanctions', txn.customer.cuit)
+    reason: "Cliente {txn.customer.cuit} coincide con lista de sanciones"
+    regulatory_refs: [LEY-26734, DEC-918-2012, UIF-FT, GAFI-R6]
+    owner: Cumplimiento PLA/FT
+
+  - id: CMN-002
+    name: Dispositivo en lista negra
+    channels: [ACQUIRING, CASH_IN, CASH_OUT]
+    category: FRAUD
+    severity: CRITICAL
+    action: DECLINE
+    score: 95
+    condition: in_list('blocked_devices', txn.device.device_id)
+    reason: "Dispositivo {txn.device.device_id} vinculado a fraude confirmado"
+    regulatory_refs: [BCRA-A7724, BCRA-PUSF]
+
+  - id: CMN-003
+    name: Operación de monto muy elevado
+    description: Monto superior al umbral de muy alto valor; requiere revisión manual.
+    channels: [ACQUIRING, CASH_IN, CASH_OUT]
+    category: AML
+    severity: HIGH
+    action: REVIEW
+    score: 60
+    condition: txn.amount_ars >= p.very_high_amount_ars
+    reason: "Monto ARS {txn.amount_ars} >= umbral {p.very_high_amount_ars}"
+    regulatory_refs: [UIF-EEFF, GAFI-R10]

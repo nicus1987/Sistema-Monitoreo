@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitoreo en Vivo</title>
+<style>
+  :root { --bg:#f7f7f5; --panel:#ffffff; --text:#1d1d1b; --muted:#6b6b66; --line:#e4e4df;
+          --ok:#2f7d4f; --warn:#b7791f; --bad:#c0392b; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161615; --panel:#1f1f1d; --text:#ecece8; --muted:#9a9a93; --line:#2f2f2c;
+            --ok:#5fbf85; --warn:#e0a84a; --bad:#ef6f61; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, sans-serif; }
+  header { padding:16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  h1 { font-size:18px; margin:0; }
+  .muted { color:var(--muted); }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; padding:16px; }
+  .kpi { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  .kpi b { display:block; font-size:22px; font-variant-numeric:tabular-nums; }
+  .wrap { padding:0 16px 16px; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:8px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-weight:600; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .APPROVE { color:var(--ok); font-weight:600; } .REVIEW { color:var(--warn); font-weight:600; } .DECLINE { color:var(--bad); font-weight:600; }
+  .reasons { font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Monitoreo transaccional en vivo</h1><span class="muted">Adquirencia · Cash-in · Cash-out</span></div>
+  <div class="muted" id="status">Conectando…</div>
+</header>
+<section class="kpis">
+  <div class="kpi"><span class="muted">Evaluadas</span><b id="k-total">0</b></div>
+  <div class="kpi"><span class="muted">Aprobadas</span><b id="k-APPROVE" class="APPROVE">0</b></div>
+  <div class="kpi"><span class="muted">En revisión</span><b id="k-REVIEW" class="REVIEW">0</b></div>
+  <div class="kpi"><span class="muted">Rechazadas</span><b id="k-DECLINE" class="DECLINE">0</b></div>
+  <div class="kpi"><span class="muted">Latencia media</span><b id="k-lat">0 ms</b></div>
+</section>
+<div class="wrap">
+<table>
+  <thead><tr><th>Hora</th><th>Transacción</th><th>Canal</th><th class="num">Monto ARS</th><th class="num">Score</th><th>Decisión</th><th>Motivos</th></tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+</div>
+<script>
+  const counts = {total:0, APPROVE:0, REVIEW:0, DECLINE:0}; let latSum = 0;
+  const fmt = new Intl.NumberFormat('es-AR', {maximumFractionDigits: 2});
+  const rows = document.getElementById('rows');
+  function cell(text, cls) { const td = document.createElement('td'); td.textContent = text; if (cls) td.className = cls; return td; }
+  const es = new EventSource('/v1/stream/decisions');
+  es.onopen = () => document.getElementById('status').textContent = 'En vivo';
+  es.onerror = () => document.getElementById('status').textContent = 'Reconectando…';
+  es.onmessage = (ev) => {
+    const d = JSON.parse(ev.data);
+    counts.total++; counts[d.action]++; latSum += d.latency_ms;
+    for (const k of ['total','APPROVE','REVIEW','DECLINE']) document.getElementById('k-'+k).textContent = fmt.format(counts[k]);
+    document.getElementById('k-lat').textContent = (latSum / counts.total).toFixed(2) + ' ms';
+    const tr = document.createElement('tr');
+    tr.append(cell(new Date(d.evaluated_at).toLocaleTimeString('es-AR')), cell(d.transaction_id), cell(d.channel),
+      cell(d.amount_ars != null ? fmt.format(d.amount_ars) : '—', 'num'), cell(d.risk_score, 'num'), cell(d.action, d.action));
+    const r = cell((d.reason_codes.length ? d.reason_codes.join(', ') + ' — ' : '') + d.reasons.join(' · '), 'reasons');
+    tr.append(r); rows.prepend(tr);
+    while (rows.children.length > 200) rows.lastChild.remove();
+  };
+</script>
+</body>
+</html>

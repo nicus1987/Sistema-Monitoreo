@@ -1,0 +1,248 @@
+# Reglas de cash-out: transferencias salientes (CBU/CVU/alias), extracciones en
+# ATM / red de pagos, retiros por ventanilla.
+rules:
+  - id: COUT-001
+    name: Cuenta puente (pass-through)
+    description: Egreso de casi todo lo ingresado en minutos (mula / capas de lavado).
+    channels: [CASH_OUT]
+    category: AML
+    severity: HIGH
+    action: REVIEW
+    score: 75
+    condition: >
+      feat.minutes_since_last_cashin <= p.passthrough_minutes
+      and feat.passthrough_ratio_24h >= p.passthrough_ratio
+      and feat.cashin_sum_24h >= p.passthrough_min_cashin_ars
+    reason: "Egresa {feat.passthrough_ratio_24h} de lo ingresado en 24h, {feat.minutes_since_last_cashin} min tras el ingreso"
+    regulatory_refs: [LEY-25246, UIF-EEFF, UIF-PSP, GAFI-R20]
+    owner: Cumplimiento PLA/FT
+
+  - id: COUT-002
+    name: Cuenta nueva con egreso relevante
+    channels: [CASH_OUT]
+    category: FRAUD
+    severity: MEDIUM
+    action: REVIEW
+    score: 55
+    condition: feat.account_age_days < p.new_account_days and txn.amount_ars >= p.new_account_cashout_ars
+    reason: "Cuenta de {feat.account_age_days} días egresa ARS {txn.amount_ars}"
+    regulatory_refs: [UIF-EEFF, BCRA-PUSF]
+
+  - id: COUT-003
+    name: Beneficiario nuevo con monto alto
+    channels: [CASH_OUT]
+    category: FRAUD
+    severity: MEDIUM
+    action: REVIEW
+    score: 50
+    condition: feat.is_new_beneficiary and txn.amount_ars >= p.new_beneficiary_high_ars
+    reason: "Primera transferencia a {txn.counterparty.account_id} por ARS {txn.amount_ars}"
+    regulatory_refs: [BCRA-PUSF, BCRA-TRANSF]
+
+  - id: COUT-004
+    name: Toma de cuenta (ATO) - dispositivo nuevo + beneficiario nuevo + sesión corta
+    channels: [CASH_OUT]
+    category: FRAUD
+    severity: CRITICAL
+    action: DECLINE
+    score: 85
+    condition: >
+      feat.is_new_device and feat.is_new_beneficiary
+      and txn.device.session_age_seconds < p.new_device_session_seconds
+    reason: "Dispositivo nuevo, beneficiario nuevo y sesión de {txn.device.session_age_seconds}s"
+    regulatory_refs: [BCRA-A7724, BCRA-PUSF]
+
+  - id: COUT-005
+    name: Dispositivo emulado o rooteado
+    channels: [CASH_OUT]
+    category: FRAUD
+    severity: HIGH
+    action: REVIEW
+    score: 60
+    condition: txn.device.is_emulator or txn.device.is_rooted
+    reason: "Dispositivo comprometido (emulador/root)"
+    regulatory_refs: [BCRA-A7724]
+
+  - id: COUT-006
+    name: Dispersión a múltiples beneficiarios (fan-out)
+    channels: [CASH_OUT]
+    category: AML
+    severity: HIGH
+    action: REVIEW
+    score: 65
+    condition: feat.cashout_distinct_beneficiaries_24h >= p.fan_out_distinct_beneficiaries_24h
+    reason: "{feat.cashout_distinct_beneficiaries_24h} beneficiarios distintos en 24h"
+    regulatory_refs: [UIF-EEFF, GAFI-R20]
+
+  - id: COUT-007
+    name: Límite diario de egresos excedido
+    channels: [CASH_OUT]
+    category: OPERATIONAL
+    severity: MEDIUM
+    action: DECLINE
+    score: 80
+    condition: feat.cashout_sum_24h_incl > p.cashout_daily_limit_ars
+    reason: "Egresos 24h ARS {feat.cashout_sum_24h_incl} > límite {p.cashout_daily_limit_ars}"
+    regulatory_refs: [BCRA-PUSF]
+
+  - id: COUT-008
+    name: Velocidad de egresos
+    channels: [CASH_OUT]
+    category: FRAUD
+    severity: MEDIUM
+    action: REVIEW
+    score: 50
+    condition: feat.cashout_count_1h >= p.cashout_velocity_1h
+    reason: "{feat.cashout_count_1h} egresos en 1h"
+    regulatory_refs: [BCRA-A7724]
+
+  - id: COUT-009
+    name: Beneficiario en listas de sanciones
+    channels: [CASH_OUT]
+    category: CFT
+    severity: CRITICAL
+    action: DECLINE
+    score: 100
+    condition: in_list('sanctions', txn.counterparty.cuit)
+    reason: "Beneficiario {txn.counterparty.cuit} en lista de sanciones"
+    regulatory_refs: [LEY-26734, DEC-918-2012, UIF-FT, GAFI-R6]
+    owner: Cumplimiento PLA/FT
+
+  - id: COUT-010
+    name: Envío a jurisdicción de alto riesgo
+    channels: [CASH_OUT]
+    category: AML
+    severity: HIGH
+    action: REVIEW
+    score: 75
+    condition: in_list('high_risk_countries', txn.counterparty.country)
+    reason: "Destino {txn.counterparty.country} (GAFI alto riesgo)"
+    regulatory_refs: [GAFI-R19, UIF-EEFF]
+
+  - id: COUT-011
+    name: Beneficiario en lista negra interna (mula)
+    channels: [CASH_OUT]
+    category: FRAUD
+    severity: CRITICAL
+    action: DECLINE
+    score: 100
+    condition: in_list('mule_accounts', txn.counterparty.account_id)
+    reason: "Beneficiario {txn.counterparty.account_id} identificado como mula"
+    regulatory_refs: [BCRA-PUSF]
+
+  - id: COUT-012
+    name: Egreso nocturno a beneficiario nuevo
+    channels: [CASH_OUT]
+    category: FRAUD
+    severity: MEDIUM
+    action: REVIEW
+    score: 45
+    condition: feat.is_night and feat.is_new_beneficiary and txn.amount_ars >= p.new_account_cashout_ars
+    reason: "Transferencia a las {feat.hour_local} hs a beneficiario nuevo"
+    regulatory_refs: [BCRA-PUSF]
+
+  - id: COUT-013
+    name: Fraccionamiento de egresos (structuring)
+    channels: [CASH_OUT]
+    category: AML
+    severity: HIGH
+    action: REVIEW
+    score: 65
+    condition: feat.near_threshold_count_7d >= p.structuring_min_count_7d
+    reason: "{feat.near_threshold_count_7d} egresos cercanos al umbral en 7 días"
+    regulatory_refs: [LEY-25246, UIF-EEFF, GAFI-R20]
+    owner: Cumplimiento PLA/FT
+
+  - id: COUT-014
+    name: Dispositivo compartido por múltiples clientes
+    channels: [CASH_OUT]
+    category: FRAUD
+    severity: HIGH
+    action: REVIEW
+    score: 60
+    condition: feat.device_distinct_subjects_24h >= p.device_distinct_subjects_24h
+    reason: "Dispositivo usado por {feat.device_distinct_subjects_24h} clientes en 24h"
+    regulatory_refs: [BCRA-A7724]
+
+  - id: COUT-015
+    name: Egresos superan el perfil transaccional
+    channels: [CASH_OUT]
+    category: AML
+    severity: MEDIUM
+    action: REVIEW
+    score: 55
+    condition: feat.profile_usage_ratio_30d >= p.profile_usage_ratio_review
+    reason: "Egresos 30d = {feat.profile_usage_ratio_30d}x ingresos declarados"
+    regulatory_refs: [UIF-EEFF, UIF-PSP]
+
+  - id: COUT-016
+    name: Beneficiario que recibe de múltiples clientes (mula / estafa)
+    description: Varios clientes propios transfieren a la misma cuenta en 24h (típico de estafas por ingeniería social).
+    channels: [CASH_OUT]
+    category: FRAUD
+    severity: HIGH
+    action: REVIEW
+    score: 70
+    condition: >
+      feat.cpty_distinct_customers_24h >= p.mule_counterparty_customers_24h
+      and not in_list('trusted_counterparties', txn.counterparty.account_id)
+    reason: "{feat.cpty_distinct_customers_24h} clientes transfirieron a este beneficiario en 24h"
+    regulatory_refs: [BCRA-PUSF, UIF-EEFF]
+
+  - id: COUT-017
+    name: Monto atípico respecto del histórico del cliente
+    channels: [CASH_OUT]
+    category: FRAUD
+    severity: MEDIUM
+    action: REVIEW
+    score: 45
+    condition: >
+      feat.history_count_90d >= p.min_history_for_profile
+      and (feat.amount_zscore >= p.amount_zscore_max or feat.amount_to_avg_ratio >= p.amount_to_avg_ratio_max)
+    reason: "Monto {feat.amount_to_avg_ratio}x el promedio (z={feat.amount_zscore})"
+    regulatory_refs: [BCRA-PUSF]
+
+  - id: COUT-018
+    name: Intentos rechazados reiterados
+    channels: [CASH_OUT]
+    category: FRAUD
+    severity: HIGH
+    action: DECLINE
+    score: 70
+    condition: feat.cashout_declines_24h >= p.cashout_max_declines_24h
+    reason: "{feat.cashout_declines_24h} egresos rechazados en 24h"
+    regulatory_refs: [BCRA-A7724]
+
+  - id: COUT-019
+    name: Cliente sin KYC verificado
+    channels: [CASH_OUT]
+    category: AML
+    severity: HIGH
+    action: DECLINE
+    score: 90
+    condition: txn.customer.kyc_verified == False and txn.amount_ars >= p.new_account_cashout_ars
+    reason: "Egreso de ARS {txn.amount_ars} sin identidad verificada"
+    regulatory_refs: [UIF-EEFF, UIF-PSP, GAFI-R10]
+
+  - id: COUT-020
+    name: PEP con egreso relevante
+    channels: [CASH_OUT]
+    category: AML
+    severity: MEDIUM
+    action: REVIEW
+    score: 50
+    condition: txn.customer.is_pep and txn.amount_ars >= p.high_amount_ars
+    reason: "Cliente PEP egresa ARS {txn.amount_ars}"
+    regulatory_refs: [UIF-PEP, GAFI-R12]
+    owner: Cumplimiento PLA/FT
+
+  - id: COUT-021
+    name: IP compartida por múltiples clientes
+    channels: [CASH_OUT]
+    category: FRAUD
+    severity: MEDIUM
+    action: REVIEW
+    score: 45
+    condition: feat.ip_distinct_subjects_1h >= p.ip_distinct_subjects_1h
+    reason: "IP usada por {feat.ip_distinct_subjects_1h} clientes en 1h"
+    regulatory_refs: [BCRA-A7724]

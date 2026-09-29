@@ -1,0 +1,84 @@
+# ============================================================================
+# Parámetros del motor de monitoreo
+# ----------------------------------------------------------------------------
+# IMPORTANTE: los montos son valores de referencia INICIALES en ARS y deben ser
+# calibrados por Prevención de Fraude y por el Oficial de Cumplimiento PLA/FT
+# según: (a) la matriz de riesgo de la entidad, (b) los umbrales vigentes de la
+# normativa UIF/BCRA al momento del despliegue y (c) el backtesting sobre
+# historia propia. Dado el contexto inflacionario, revisar al menos
+# trimestralmente y dejar constancia (gestión de cambios, Com. "A" 7724).
+# ============================================================================
+
+timezone: America/Argentina/Buenos_Aires
+latency_budget_ms: 100          # SLA de respuesta síncrona del motor
+night_hours: [0, 6]             # franja horaria de mayor riesgo (hora local)
+
+# --- Montos generales -------------------------------------------------------
+high_amount_ars: 2000000        # operación de monto alto (revisión)
+very_high_amount_ars: 10000000  # operación de monto muy alto (rechazo/retención)
+round_base_ars: 100000          # múltiplo considerado "monto redondo"
+round_min_ars: 500000
+
+# --- Adquirencia ------------------------------------------------------------
+card_testing_max_amount_ars: 1000       # micro-montos típicos de testeo de tarjetas
+card_testing_min_attempts_1h: 5
+card_velocity_10m: 5
+card_velocity_1h: 10
+card_max_declines_1h: 3
+card_distinct_merchants_1h: 5
+card_daily_amount_ars: 5000000
+impossible_travel_kmh: 900
+merchant_ticket_ratio_max: 10           # ticket vs ticket promedio del comercio
+merchant_min_history: 20
+merchant_distinct_cards_1h: 50
+merchant_decline_ratio_max: 0.5
+merchant_new_days: 30
+merchant_new_daily_amount_ars: 20000000
+merchant_foreign_ratio_max: 0.6
+
+# --- Cash-in / Cash-out -----------------------------------------------------
+# Umbral para detección de fraccionamiento (structuring). Ajustar al umbral de
+# reporte/control que la entidad utilice (ej. umbral de registración o de
+# requerimiento de documentación de origen de fondos).
+structuring_threshold_ars: 1000000
+structuring_band_pct: 0.10              # 10% por debajo del umbral
+structuring_min_count_7d: 3
+
+cash_deposit_high_ars: 5000000          # depósito en efectivo relevante
+cash_monthly_cap_ars: 20000000
+new_account_days: 30
+new_account_cashin_24h_ars: 3000000
+new_account_cashout_ars: 1000000
+cashout_daily_limit_ars: 15000000
+cashout_velocity_1h: 5
+passthrough_ratio: 0.9                  # >= 90% de lo ingresado sale en 24h
+passthrough_minutes: 60
+passthrough_min_cashin_ars: 300000
+fan_in_distinct_senders_24h: 10         # muchos originantes -> una cuenta (mula)
+fan_out_distinct_beneficiaries_24h: 8   # una cuenta -> muchos beneficiarios
+mule_counterparty_customers_24h: 5
+new_beneficiary_high_ars: 1500000
+profile_usage_ratio_review: 1.5         # uso > 150% del perfil (ingresos declarados)
+profile_usage_ratio_critical: 3.0
+amount_zscore_max: 4.0
+amount_to_avg_ratio_max: 8
+min_history_for_profile: 5
+device_distinct_subjects_24h: 3         # un dispositivo operando varios clientes
+ip_distinct_subjects_1h: 5
+new_device_session_seconds: 120         # sesión recién iniciada en dispositivo nuevo
+
+# --- Política de decisión por canal (score 0-100, combinación noisy-OR) ----
+decision_thresholds:
+  ACQUIRING: {review: 60, decline: 85}
+  CASH_IN:   {review: 50, decline: 90}
+  CASH_OUT:  {review: 50, decline: 80}
+
+# --- Contingencia ante falla del motor (plan de continuidad) ----------------
+fallback:
+  ACQUIRING: {approve_below_ars: 50000,  otherwise: DECLINE}
+  CASH_IN:   {approve_below_ars: 1000000, otherwise: REVIEW}
+  CASH_OUT:  {approve_below_ars: 100000, otherwise: REVIEW}
+
+# --- Parámetros adicionales -------------------------------------------------
+cashin_velocity_1h: 10
+cashout_max_declines_24h: 3

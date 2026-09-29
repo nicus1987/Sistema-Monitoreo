@@ -1,0 +1,211 @@
+# Reglas de cash-in: depósitos (efectivo en red de cobranza / ventanilla / ATM),
+# transferencias entrantes, DEBIN y cargas de billetera.
+rules:
+  - id: CIN-001
+    name: Fraccionamiento de ingresos (structuring)
+    description: Varias operaciones apenas por debajo del umbral de control en 7 días.
+    channels: [CASH_IN]
+    category: AML
+    severity: HIGH
+    action: REVIEW
+    score: 70
+    condition: feat.near_threshold_count_7d >= p.structuring_min_count_7d
+    reason: "{feat.near_threshold_count_7d} ingresos cercanos al umbral en 7 días"
+    regulatory_refs: [LEY-25246, UIF-EEFF, GAFI-R20]
+    owner: Cumplimiento PLA/FT
+
+  - id: CIN-002
+    name: Depósito en efectivo elevado
+    description: Requiere documentación respaldatoria de origen de fondos.
+    channels: [CASH_IN]
+    category: AML
+    severity: HIGH
+    action: REVIEW
+    score: 60
+    condition: txn.method == 'CASH' and txn.amount_ars >= p.cash_deposit_high_ars
+    reason: "Efectivo ARS {txn.amount_ars} — solicitar origen de fondos"
+    regulatory_refs: [UIF-EEFF, GAFI-R10]
+    owner: Cumplimiento PLA/FT
+
+  - id: CIN-003
+    name: Acumulado mensual de efectivo excedido
+    channels: [CASH_IN]
+    category: AML
+    severity: HIGH
+    action: REVIEW
+    score: 65
+    condition: txn.method == 'CASH' and feat.cash_method_sum_30d_incl > p.cash_monthly_cap_ars
+    reason: "Efectivo acumulado 30d ARS {feat.cash_method_sum_30d_incl}"
+    regulatory_refs: [UIF-EEFF, GAFI-R10]
+
+  - id: CIN-004
+    name: Múltiples originantes hacia una cuenta (fan-in)
+    description: Patrón de cuenta mula recolectora (muchas víctimas / pitufeo).
+    channels: [CASH_IN]
+    category: AML
+    severity: HIGH
+    action: REVIEW
+    score: 70
+    condition: >
+      feat.cashin_distinct_senders_24h >= p.fan_in_distinct_senders_24h
+      and not in_list('trusted_counterparties', txn.counterparty.account_id)
+    reason: "{feat.cashin_distinct_senders_24h} originantes distintos en 24h"
+    regulatory_refs: [UIF-EEFF, BCRA-PUSF, GAFI-R20]
+
+  - id: CIN-005
+    name: Cuenta nueva con ingresos elevados
+    channels: [CASH_IN]
+    category: AML
+    severity: HIGH
+    action: REVIEW
+    score: 65
+    condition: >
+      feat.account_age_days < p.new_account_days
+      and feat.cashin_sum_24h_incl >= p.new_account_cashin_24h_ars
+    reason: "Cuenta de {feat.account_age_days} días recibió ARS {feat.cashin_sum_24h_incl} en 24h"
+    regulatory_refs: [UIF-EEFF, GAFI-R10]
+
+  - id: CIN-006
+    name: Ingresos superan el perfil transaccional
+    channels: [CASH_IN]
+    category: AML
+    severity: MEDIUM
+    action: REVIEW
+    score: 55
+    condition: >
+      feat.profile_usage_ratio_30d >= p.profile_usage_ratio_review
+      and feat.profile_usage_ratio_30d < p.profile_usage_ratio_critical
+    reason: "Ingresos 30d = {feat.profile_usage_ratio_30d}x ingresos declarados"
+    regulatory_refs: [UIF-EEFF, UIF-PSP]
+    owner: Cumplimiento PLA/FT
+
+  - id: CIN-007
+    name: Ingresos muy superiores al perfil transaccional
+    channels: [CASH_IN]
+    category: AML
+    severity: HIGH
+    action: REVIEW
+    score: 80
+    condition: feat.profile_usage_ratio_30d >= p.profile_usage_ratio_critical
+    reason: "Ingresos 30d = {feat.profile_usage_ratio_30d}x ingresos declarados"
+    regulatory_refs: [UIF-EEFF, UIF-PSP, LEY-25246]
+    owner: Cumplimiento PLA/FT
+
+  - id: CIN-008
+    name: Originante en listas de sanciones
+    channels: [CASH_IN]
+    category: CFT
+    severity: CRITICAL
+    action: DECLINE
+    score: 100
+    condition: in_list('sanctions', txn.counterparty.cuit)
+    reason: "Originante {txn.counterparty.cuit} en lista de sanciones"
+    regulatory_refs: [LEY-26734, DEC-918-2012, UIF-FT, GAFI-R6]
+    owner: Cumplimiento PLA/FT
+
+  - id: CIN-009
+    name: Fondos desde jurisdicción de alto riesgo
+    channels: [CASH_IN]
+    category: AML
+    severity: HIGH
+    action: REVIEW
+    score: 70
+    condition: in_list('high_risk_countries', txn.counterparty.country)
+    reason: "Origen {txn.counterparty.country} (GAFI alto riesgo)"
+    regulatory_refs: [GAFI-R19, UIF-EEFF]
+
+  - id: CIN-010
+    name: PEP con operación relevante
+    description: Debida diligencia reforzada para Personas Expuestas Políticamente.
+    channels: [CASH_IN]
+    category: AML
+    severity: MEDIUM
+    action: REVIEW
+    score: 50
+    condition: txn.customer.is_pep and txn.amount_ars >= p.high_amount_ars
+    reason: "Cliente PEP ingresa ARS {txn.amount_ars}"
+    regulatory_refs: [UIF-PEP, GAFI-R12]
+    owner: Cumplimiento PLA/FT
+
+  - id: CIN-011
+    name: Cliente de riesgo alto con monto alto
+    channels: [CASH_IN]
+    category: AML
+    severity: MEDIUM
+    action: REVIEW
+    score: 45
+    condition: txn.customer.risk_level == 'HIGH' and txn.amount_ars >= p.high_amount_ars
+    reason: "Cliente riesgo ALTO ingresa ARS {txn.amount_ars}"
+    regulatory_refs: [UIF-EEFF, GAFI-R1]
+
+  - id: CIN-012
+    name: Monto atípico respecto del histórico del cliente
+    channels: [CASH_IN]
+    category: AML
+    severity: MEDIUM
+    action: REVIEW
+    score: 45
+    condition: >
+      feat.history_count_90d >= p.min_history_for_profile
+      and (feat.amount_zscore >= p.amount_zscore_max or feat.amount_to_avg_ratio >= p.amount_to_avg_ratio_max)
+    reason: "Monto {feat.amount_to_avg_ratio}x el promedio (z={feat.amount_zscore})"
+    regulatory_refs: [UIF-EEFF]
+
+  - id: CIN-013
+    name: Cliente sin KYC verificado con monto relevante
+    channels: [CASH_IN]
+    category: AML
+    severity: HIGH
+    action: REVIEW
+    score: 60
+    condition: txn.customer.kyc_verified == False and txn.amount_ars >= p.structuring_threshold_ars * 0.5
+    reason: "Identidad no verificada; ingreso ARS {txn.amount_ars}"
+    regulatory_refs: [UIF-EEFF, UIF-PSP, GAFI-R10]
+
+  - id: CIN-014
+    name: Velocidad de ingresos
+    channels: [CASH_IN]
+    category: AML
+    severity: MEDIUM
+    action: REVIEW
+    score: 40
+    condition: feat.cashin_count_1h >= p.cashin_velocity_1h
+    reason: "{feat.cashin_count_1h} ingresos en 1h"
+    regulatory_refs: [UIF-EEFF]
+
+  - id: CIN-015
+    name: Efectivo en montos redondos
+    description: Señal débil; en modo sombra para medir su poder predictivo.
+    channels: [CASH_IN]
+    category: AML
+    severity: LOW
+    action: REVIEW
+    score: 20
+    mode: shadow
+    condition: txn.method == 'CASH' and feat.is_round_amount
+    reason: "Efectivo en monto redondo ARS {txn.amount_ars}"
+    regulatory_refs: [UIF-EEFF]
+
+  - id: CIN-016
+    name: Originante que fondea a múltiples clientes
+    channels: [CASH_IN]
+    category: AML
+    severity: HIGH
+    action: REVIEW
+    score: 60
+    condition: >
+      feat.cpty_distinct_customers_24h >= p.mule_counterparty_customers_24h
+      and not in_list('trusted_counterparties', txn.counterparty.account_id)
+    reason: "La cuenta originante fondeó a {feat.cpty_distinct_customers_24h} clientes en 24h"
+    regulatory_refs: [UIF-EEFF, GAFI-R20]
+
+  - id: CIN-017
+    name: Originante en lista negra interna (mula)
+    channels: [CASH_IN]
+    category: FRAUD
+    severity: CRITICAL
+    action: DECLINE
+    score: 95
+    condition: in_list('mule_accounts', txn.counterparty.account_id)
+    reason: "Cuenta originante {txn.counterparty.account_id} identificada como mula"
+    regulatory_refs: [BCRA-PUSF]

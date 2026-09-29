@@ -1,0 +1,275 @@
+# Reglas de adquirencia (procesamiento de pagos con tarjeta para comercios).
+rules:
+  - id: ACQ-001
+    name: Testeo de tarjetas (card testing)
+    description: Múltiples micro-operaciones de la misma tarjeta en 1h, patrón de validación de tarjetas robadas.
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: HIGH
+    action: DECLINE
+    score: 90
+    condition: >
+      txn.amount_ars <= p.card_testing_max_amount_ars
+      and feat.card_small_txn_count_1h >= p.card_testing_min_attempts_1h
+    reason: "{feat.card_small_txn_count_1h} micro-operaciones previas en 1h"
+    regulatory_refs: [PCI-DSS, BCRA-A7724]
+
+  - id: ACQ-002
+    name: Velocidad de tarjeta 10 minutos (no presente)
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: HIGH
+    action: DECLINE
+    score: 80
+    condition: feat.card_not_present and feat.card_count_10m >= p.card_velocity_10m
+    reason: "{feat.card_count_10m} operaciones CNP en 10 minutos"
+    regulatory_refs: [BCRA-A7724]
+
+  - id: ACQ-003
+    name: Velocidad de tarjeta 1 hora
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: MEDIUM
+    action: REVIEW
+    score: 45
+    condition: feat.card_count_1h >= p.card_velocity_1h
+    reason: "{feat.card_count_1h} operaciones de la tarjeta en 1h"
+    regulatory_refs: [BCRA-A7724]
+
+  - id: ACQ-004
+    name: Rechazos reiterados de la tarjeta
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: HIGH
+    action: DECLINE
+    score: 85
+    condition: feat.card_declines_1h >= p.card_max_declines_1h
+    reason: "{feat.card_declines_1h} rechazos en la última hora"
+    regulatory_refs: [BCRA-A7724]
+
+  - id: ACQ-005
+    name: Tarjeta en múltiples comercios (no presente)
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: MEDIUM
+    action: REVIEW
+    score: 55
+    condition: feat.card_not_present and feat.card_distinct_merchants_1h >= p.card_distinct_merchants_1h
+    reason: "Tarjeta usada en {feat.card_distinct_merchants_1h} comercios distintos en 1h"
+    regulatory_refs: [BCRA-A7724]
+
+  - id: ACQ-006
+    name: Viaje imposible
+    description: Dos operaciones presenciales separadas por una distancia imposible de recorrer en el tiempo transcurrido (clonación).
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: CRITICAL
+    action: DECLINE
+    score: 90
+    condition: not feat.card_not_present and feat.card_geo_speed_kmh > p.impossible_travel_kmh
+    reason: "Velocidad implícita {feat.card_geo_speed_kmh} km/h ({feat.card_geo_distance_km} km)"
+    regulatory_refs: [BCRA-A7724]
+
+  - id: ACQ-007
+    name: Monto alto no presente sin autenticación 3DS
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: HIGH
+    action: DECLINE
+    score: 75
+    condition: >
+      feat.card_not_present and txn.three_ds_authenticated != True
+      and txn.amount_ars >= p.high_amount_ars
+    reason: "CNP por ARS {txn.amount_ars} sin autenticación fuerte"
+    regulatory_refs: [BCRA-PUSF, PCI-DSS]
+
+  - id: ACQ-008
+    name: CVV no coincide
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: HIGH
+    action: DECLINE
+    score: 90
+    condition: txn.cvv_match == False
+    reason: "Código de seguridad inválido"
+    regulatory_refs: [PCI-DSS]
+
+  - id: ACQ-009
+    name: Ingreso manual de tarjeta con monto alto
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: MEDIUM
+    action: REVIEW
+    score: 40
+    condition: txn.entry_mode == 'MANUAL' and txn.amount_ars >= p.high_amount_ars / 2
+    reason: "Key-entry por ARS {txn.amount_ars}"
+    regulatory_refs: [PCI-DSS]
+
+  - id: ACQ-010
+    name: Banda magnética (posible clonación / fallback)
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: MEDIUM
+    action: REVIEW
+    score: 40
+    condition: txn.entry_mode == 'MAGSTRIPE'
+    reason: "Lectura por banda magnética en lugar de chip/contactless"
+    regulatory_refs: [PCI-DSS]
+
+  - id: ACQ-011
+    name: País emisor distinto al país de la IP (no presente)
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: LOW
+    action: REVIEW
+    score: 35
+    condition: feat.card_not_present and feat.bin_country_mismatch
+    reason: "Emisor {txn.card.issuer_country} vs IP {txn.device.ip_country}"
+    regulatory_refs: [BCRA-A7724]
+
+  - id: ACQ-012
+    name: BIN comprometido
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: CRITICAL
+    action: DECLINE
+    score: 100
+    condition: prefix_in_list('blocked_bins', txn.card.bin)
+    reason: "BIN {txn.card.bin} en lista de BINs comprometidos"
+    regulatory_refs: [PCI-DSS]
+
+  - id: ACQ-013
+    name: Ticket anómalo para el comercio
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: MEDIUM
+    action: REVIEW
+    score: 50
+    condition: >
+      feat.merchant_history_count_30d >= p.merchant_min_history
+      and feat.merchant_ticket_ratio >= p.merchant_ticket_ratio_max
+    reason: "Ticket {feat.merchant_ticket_ratio}x el promedio del comercio"
+    regulatory_refs: [UIF-EEFF, GAFI-R10]
+
+  - id: ACQ-014
+    name: Ataque de enumeración sobre comercio
+    description: Muchas tarjetas distintas con alta tasa de rechazo en el mismo comercio (BIN attack).
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: CRITICAL
+    action: DECLINE
+    score: 85
+    condition: >
+      feat.merchant_distinct_cards_1h >= p.merchant_distinct_cards_1h
+      and feat.merchant_decline_ratio_1h >= p.merchant_decline_ratio_max
+    reason: "{feat.merchant_distinct_cards_1h} tarjetas y {feat.merchant_decline_ratio_1h} de rechazo en 1h"
+    regulatory_refs: [PCI-DSS, BCRA-A7724]
+
+  - id: ACQ-015
+    name: Comercio nuevo con volumen elevado
+    description: Comercio recién adherido que procesa volumen alto (bust-out / transaction laundering).
+    channels: [ACQUIRING]
+    category: AML
+    severity: HIGH
+    action: REVIEW
+    score: 60
+    condition: >
+      feat.merchant_age_days < p.merchant_new_days
+      and feat.merchant_sum_24h_incl > p.merchant_new_daily_amount_ars
+    reason: "Comercio con {feat.merchant_age_days} días procesó ARS {feat.merchant_sum_24h_incl} en 24h"
+    regulatory_refs: [UIF-EEFF, UIF-PSP, GAFI-R10]
+    owner: Cumplimiento PLA/FT
+
+  - id: ACQ-016
+    name: MCC de alto riesgo con monto alto
+    channels: [ACQUIRING]
+    category: AML
+    severity: MEDIUM
+    action: REVIEW
+    score: 40
+    condition: in_list('high_risk_mcc', txn.merchant.mcc) and txn.amount_ars >= p.high_amount_ars
+    reason: "MCC {txn.merchant.mcc} de alto riesgo por ARS {txn.amount_ars}"
+    regulatory_refs: [UIF-EEFF, GAFI-R10]
+
+  - id: ACQ-017
+    name: Tarjeta o comercio de jurisdicción de alto riesgo
+    channels: [ACQUIRING]
+    category: AML
+    severity: HIGH
+    action: REVIEW
+    score: 60
+    condition: >
+      in_list('high_risk_countries', txn.card.issuer_country)
+      or in_list('high_risk_countries', txn.merchant.country)
+    reason: "Jurisdicción de alto riesgo GAFI"
+    regulatory_refs: [GAFI-R19, UIF-EEFF]
+
+  - id: ACQ-018
+    name: Tarjeta nueva, no presente, nocturna y monto alto
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: MEDIUM
+    action: REVIEW
+    score: 45
+    condition: >
+      feat.is_night and feat.card_not_present and feat.card_is_new
+      and txn.amount_ars >= p.high_amount_ars / 2
+    reason: "Primera operación de la tarjeta a las {feat.hour_local} hs por ARS {txn.amount_ars}"
+    regulatory_refs: [BCRA-A7724]
+
+  - id: ACQ-019
+    name: Monto diario de tarjeta excedido
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: MEDIUM
+    action: REVIEW
+    score: 55
+    condition: feat.card_sum_24h_incl > p.card_daily_amount_ars
+    reason: "Acumulado 24h ARS {feat.card_sum_24h_incl}"
+    regulatory_refs: [BCRA-A7724]
+
+  - id: ACQ-020
+    name: Concentración de tarjetas extranjeras en comercio
+    description: Regla en modo sombra (challenger) para calibración; no impacta la decisión.
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: LOW
+    action: REVIEW
+    score: 40
+    mode: shadow
+    condition: feat.merchant_count_1h >= 10 and feat.merchant_foreign_card_ratio_1h > p.merchant_foreign_ratio_max
+    reason: "{feat.merchant_foreign_card_ratio_1h} de tarjetas extranjeras en 1h"
+    regulatory_refs: [BCRA-A7724]
+
+  - id: ACQ-021
+    name: Dispositivo emulado o rooteado (no presente)
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: HIGH
+    action: REVIEW
+    score: 60
+    condition: feat.card_not_present and (txn.device.is_emulator or txn.device.is_rooted)
+    reason: "Dispositivo comprometido (emulador/root)"
+    regulatory_refs: [BCRA-A7724]
+
+  - id: ACQ-022
+    name: Comercio bloqueado
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: CRITICAL
+    action: DECLINE
+    score: 100
+    condition: in_list('blocked_merchants', txn.merchant.merchant_id)
+    reason: "Comercio {txn.merchant.merchant_id} bloqueado"
+    regulatory_refs: [UIF-PSP]
+
+  - id: ACQ-023
+    name: Fraccionamiento de venta en el mismo comercio
+    channels: [ACQUIRING]
+    category: FRAUD
+    severity: MEDIUM
+    action: REVIEW
+    score: 45
+    condition: feat.card_same_merchant_count_1h >= 3 and not txn.is_recurring
+    reason: "{feat.card_same_merchant_count_1h} operaciones previas misma tarjeta/comercio en 1h"
+    regulatory_refs: [BCRA-A7724]

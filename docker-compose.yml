@@ -1,0 +1,27 @@
+# Entorno local: API + consumidor Kafka + Redpanda (compatible Kafka).
+services:
+  api:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      MONITOREO_API_KEYS: ${MONITOREO_API_KEYS:-}
+      MONITOREO_ADMIN_KEYS: ${MONITOREO_ADMIN_KEYS:-}
+    volumes: [audit:/data/audit]
+
+  stream:
+    build: .
+    command: ["python", "-m", "monitoreo.stream.consumer"]
+    environment:
+      KAFKA_BOOTSTRAP: redpanda:9092
+      MONITOREO_AUDIT_PATH: /data/audit/stream.jsonl
+    depends_on: [redpanda]
+    volumes: [audit:/data/audit]
+
+  redpanda:
+    image: redpandadata/redpanda:latest
+    command: ["redpanda", "start", "--overprovisioned", "--smp", "1", "--memory", "512M",
+              "--kafka-addr", "0.0.0.0:9092", "--advertise-kafka-addr", "redpanda:9092"]
+    ports: ["9092:9092"]
+
+volumes:
+  audit:

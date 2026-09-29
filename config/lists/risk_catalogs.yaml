@@ -1,0 +1,22 @@
+# Catálogos de riesgo. Revisar tras cada plenario del GAFI (feb/jun/oct).
+version: "2026-09-29-demo"
+lists:
+  # Jurisdicciones de alto riesgo ("llamado a la acción") y bajo monitoreo
+  # intensificado del GAFI. ACTUALIZAR contra la publicación vigente del GAFI.
+  high_risk_countries:
+    - "KP"   # Corea del Norte
+    - "IR"   # Irán
+    - "MM"   # Myanmar
+  # MCC de mayor riesgo de fraude / lavado (transaction laundering)
+  high_risk_mcc:
+    - "4829"  # Transferencias de dinero / giros
+    - "5816"  # Bienes digitales - juegos
+    - "5933"  # Casas de empeño
+    - "5944"  # Joyerías
+    - "5966"  # Telemarketing saliente
+    - "5967"  # Telemarketing entrante / contenido adulto
+    - "6051"  # Cuasi-efectivo / cripto
+    - "6211"  # Valores / inversiones
+    - "6540"  # Carga de valor almacenado
+    - "7273"  # Citas / acompañantes
+    - "7995"  # Juegos de azar / apuestas
