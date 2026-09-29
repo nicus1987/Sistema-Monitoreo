@@ -5,6 +5,10 @@
 # ============================================================================
 set -euo pipefail
 cd "$(dirname "$0")"
+if [ ! -f pyproject.toml ]; then
+  echo "[ERROR] No se encuentran los archivos del proyecto. Descomprimí el ZIP y ejecutá el script desde esa carpeta."
+  exit 1
+fi
 
 PY=""
 for cand in python3.13 python3.12 python3.11 python3 python; do
@@ -33,7 +37,18 @@ echo "[3/3] Levantando la API..."
 API_PID=$!
 trap 'echo; echo "Deteniendo la API..."; kill $API_PID 2>/dev/null || true' EXIT
 
-.venv/bin/python -m monitoreo.simulator --url http://localhost:8000 --wait-only >/dev/null
+sleep 2
+if ! kill -0 "$API_PID" 2>/dev/null || ! .venv/bin/python -m monitoreo.simulator --url http://localhost:8000 --wait-only; then
+  echo
+  echo "[ERROR] La API no arrancó. Últimas líneas de monitoreo-api.log:"
+  echo "--------------------------------------------------------------"
+  tail -25 monitoreo-api.log
+  echo "--------------------------------------------------------------"
+  if grep -qi "address already in use" monitoreo-api.log; then
+    echo "El puerto 8000 está ocupado: probablemente el sistema ya está corriendo en otra terminal."
+  fi
+  exit 1
+fi
 URL=http://localhost:8000
 (command -v open >/dev/null && open "$URL") || (command -v xdg-open >/dev/null && xdg-open "$URL") || true
 

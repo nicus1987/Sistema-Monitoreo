@@ -7,6 +7,25 @@ setlocal
 cd /d "%~dp0"
 chcp 65001 >nul
 
+if not exist "pyproject.toml" (
+  echo.
+  echo [ERROR] No se encuentran los archivos del proyecto.
+  echo  Si abriste este archivo desde adentro del ZIP: primero hace clic derecho
+  echo  en el ZIP, "Extraer todo...", y ejecuta iniciar_windows.bat desde la carpeta extraida.
+  echo.
+  pause
+  exit /b 1
+)
+
+netstat -ano | findstr /r /c:":8000 .*LISTENING" >nul 2>nul && (
+  echo.
+  echo [ERROR] El puerto 8000 ya esta en uso: probablemente el sistema ya esta corriendo
+  echo  en otra ventana. Cerrala ^(o abri http://localhost:8000^) y volve a intentar.
+  echo.
+  pause
+  exit /b 1
+)
+
 set "PY="
 where py >nul 2>nul && py -3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>nul && set "PY=py -3"
 if not defined PY (
@@ -33,9 +52,17 @@ echo [2/3] Instalando dependencias...
 ".venv\Scripts\python.exe" -m pip install --quiet -e ".[dev]" || (echo [ERROR] Fallo la instalacion & pause & exit /b 1)
 
 echo [3/3] Levantando la API en una ventana nueva...
-start "Monitoreo - API (cerrar para detener)" ".venv\Scripts\python.exe" -m monitoreo
+start "Monitoreo - API (cerrar para detener)" cmd /k .venv\Scripts\python.exe -m monitoreo
 
-".venv\Scripts\python.exe" -m monitoreo.simulator --url http://localhost:8000 --wait-only >nul 2>nul
+".venv\Scripts\python.exe" -m monitoreo.simulator --url http://localhost:8000 --wait-only
+if errorlevel 1 (
+  echo.
+  echo [ERROR] La API no arranco. Mira el mensaje de error en la ventana
+  echo  "Monitoreo - API" y copialo para pedir ayuda.
+  echo.
+  pause
+  exit /b 1
+)
 start "" http://localhost:8000
 
 echo.
