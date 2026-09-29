@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 import zlib
@@ -22,7 +23,7 @@ from .models import Action, Channel, Decision, RuleHit, Transaction
 
 log = logging.getLogger(__name__)
 
-DEFAULT_CONFIG_DIR = Path(__file__).resolve().parents[2] / "config"
+DEFAULT_CONFIG_DIR = Path(os.getenv("MONITOREO_CONFIG_DIR") or Path(__file__).resolve().parents[2] / "config")
 
 
 def combine_scores(hits: list[RuleHit]) -> int:

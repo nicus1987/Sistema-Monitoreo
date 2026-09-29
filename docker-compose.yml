@@ -19,7 +19,7 @@ services:
 
   redpanda:
     image: redpandadata/redpanda:latest
-    command: ["redpanda", "start", "--overprovisioned", "--smp", "1", "--memory", "512M",
+    command: ["redpanda", "start", "--mode", "dev-container", "--overprovisioned", "--smp", "1", "--memory", "512M",
               "--kafka-addr", "0.0.0.0:9092", "--advertise-kafka-addr", "redpanda:9092"]
     ports: ["9092:9092"]
 
