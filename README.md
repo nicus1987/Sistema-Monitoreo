@@ -13,7 +13,20 @@ financiero (GAFI, PCI DSS).
 - **Auditoría inmutable** encadenada por hash, versionado de reglas, modo *shadow*,
   gestión de alertas con 4 ojos para ROS, política de contingencia ante fallas.
 
-## Inicio rápido
+## Inicio rápido (doble clic)
+
+Requisito: **Python 3.11 o superior** ([python.org/downloads](https://www.python.org/downloads/);
+en Windows marcar *"Add python.exe to PATH"* al instalar).
+
+- **Windows:** doble clic en `iniciar_windows.bat`
+- **macOS / Linux:** `./iniciar.sh`
+
+El script crea el entorno, instala dependencias, levanta la API, abre el dashboard en
+http://localhost:8000 y envía tráfico de prueba con escenarios de fraude.
+
+![Dashboard en vivo](docs/dashboard.png)
+
+## Inicio manual
 
 ```bash
 pip install -e ".[dev]"

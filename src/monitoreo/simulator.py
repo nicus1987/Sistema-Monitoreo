@@ -124,10 +124,26 @@ SCENARIOS = {
 
 
 def all_traffic(normal: int = 300) -> list[dict[str, Any]]:
+    """Tráfico normal con los escenarios intercalados en posiciones al azar
+    (cada escenario conserva el orden interno de sus operaciones)."""
     events = list(normal_traffic(normal))
     for gen in SCENARIOS.values():
-        events.extend(gen())
+        pos = random.randint(0, len(events))
+        events[pos:pos] = list(gen())
     return events
+
+
+def wait_for_api(url: str, timeout: float = 60) -> None:
+    deadline = time.time() + timeout
+    while True:
+        try:
+            with urllib.request.urlopen(f"{url}/health", timeout=2):  # noqa: S310
+                return
+        except OSError:
+            if time.time() > deadline:
+                raise SystemExit(f"La API no responde en {url}. ¿Está levantada (python -m monitoreo)?")
+            print("Esperando a que la API esté lista...")
+            time.sleep(2)
 
 
 def main() -> None:  # pragma: no cover
@@ -136,8 +152,13 @@ def main() -> None:  # pragma: no cover
     parser.add_argument("--normal", type=int, default=300)
     parser.add_argument("--rate", type=float, default=0, help="transacciones por segundo (0 = sin límite)")
     parser.add_argument("--api-key", default=None)
+    parser.add_argument("--wait-only", action="store_true", help="sólo esperar a que la API responda")
     args = parser.parse_args()
 
+    if args.url:
+        wait_for_api(args.url)
+        if args.wait_only:
+            return
     events = all_traffic(args.normal)
     actions: Counter[str] = Counter()
     rules: Counter[str] = Counter()

@@ -26,6 +26,12 @@
   td.num { text-align:right; font-variant-numeric:tabular-nums; }
   .APPROVE { color:var(--ok); font-weight:600; } .REVIEW { color:var(--warn); font-weight:600; } .DECLINE { color:var(--bad); font-weight:600; }
   .reasons { font-size:12px; color:var(--muted); }
+  td.id { white-space:nowrap; font-family:ui-monospace, monospace; font-size:12px; }
+  tr.risk-REVIEW { background:color-mix(in srgb, var(--warn) 10%, transparent); }
+  tr.risk-DECLINE { background:color-mix(in srgb, var(--bad) 10%, transparent); }
+  tr.risk-REVIEW .reasons, tr.risk-DECLINE .reasons { color:var(--text); }
+  .toolbar { padding:0 16px 12px; display:flex; gap:8px; align-items:center; }
+  body.only-risk tr.risk-APPROVE { display:none; }
 </style>
 </head>
 <body>
@@ -40,6 +46,7 @@
   <div class="kpi"><span class="muted">Rechazadas</span><b id="k-DECLINE" class="DECLINE">0</b></div>
   <div class="kpi"><span class="muted">Latencia media</span><b id="k-lat">0 ms</b></div>
 </section>
+<div class="toolbar"><label><input type="checkbox" id="only-risk"> Mostrar sólo operaciones en revisión o rechazadas</label></div>
 <div class="wrap">
 <table>
   <thead><tr><th>Hora</th><th>Transacción</th><th>Canal</th><th class="num">Monto ARS</th><th class="num">Score</th><th>Decisión</th><th>Motivos</th></tr></thead>
@@ -48,8 +55,15 @@
 </div>
 <script>
   const counts = {total:0, APPROVE:0, REVIEW:0, DECLINE:0}; let latSum = 0;
-  const fmt = new Intl.NumberFormat('es-AR', {maximumFractionDigits: 2});
+  const fmt = new Intl.NumberFormat('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
   const rows = document.getElementById('rows');
+  const onlyRisk = document.getElementById('only-risk');
+  try { onlyRisk.checked = localStorage.getItem('onlyRisk') === '1'; } catch (e) {}
+  document.body.classList.toggle('only-risk', onlyRisk.checked);
+  onlyRisk.addEventListener('change', () => {
+    document.body.classList.toggle('only-risk', onlyRisk.checked);
+    try { localStorage.setItem('onlyRisk', onlyRisk.checked ? '1' : '0'); } catch (e) {}
+  });
   function cell(text, cls) { const td = document.createElement('td'); td.textContent = text; if (cls) td.className = cls; return td; }
   const es = new EventSource('/v1/stream/decisions');
   es.onopen = () => document.getElementById('status').textContent = 'En vivo';
@@ -57,10 +71,11 @@
   es.onmessage = (ev) => {
     const d = JSON.parse(ev.data);
     counts.total++; counts[d.action]++; latSum += d.latency_ms;
-    for (const k of ['total','APPROVE','REVIEW','DECLINE']) document.getElementById('k-'+k).textContent = fmt.format(counts[k]);
+    for (const k of ['total','APPROVE','REVIEW','DECLINE']) document.getElementById('k-'+k).textContent = counts[k].toLocaleString('es-AR');
     document.getElementById('k-lat').textContent = (latSum / counts.total).toFixed(2) + ' ms';
     const tr = document.createElement('tr');
-    tr.append(cell(new Date(d.evaluated_at).toLocaleTimeString('es-AR')), cell(d.transaction_id), cell(d.channel),
+    tr.className = 'risk-' + d.action;
+    tr.append(cell(new Date(d.evaluated_at).toLocaleTimeString('es-AR')), cell(d.transaction_id, 'id'), cell(d.channel),
       cell(d.amount_ars != null ? fmt.format(d.amount_ars) : '—', 'num'), cell(d.risk_score, 'num'), cell(d.action, d.action));
     const r = cell((d.reason_codes.length ? d.reason_codes.join(', ') + ' — ' : '') + d.reasons.join(' · '), 'reasons');
     tr.append(r); rows.prepend(tr);
