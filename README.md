@@ -13,6 +13,15 @@ financiero (GAFI, PCI DSS).
 - **Auditoría inmutable** encadenada por hash, versionado de reglas, modo *shadow*,
   gestión de alertas con 4 ojos para ROS, política de contingencia ante fallas.
 
+## Probarlo en el navegador, sin instalar nada (GitHub Codespaces)
+
+[![Abrir en GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/nicus1987/Sistema-Monitoreo?ref=claude/zealous-mccarthy-tukc76)
+
+Hacer clic en el botón → **Create codespace**. En 2–3 minutos se instala todo, arranca la
+API, se envía tráfico de prueba y se abre el dashboard en una pestaña nueva. Si no se
+abre solo: pestaña **PORTS** (abajo) → puerto **8000** → ícono del globo. Para generar
+más tráfico, en la terminal: `python -m monitoreo.simulator --url http://localhost:8000 --rate 3`.
+
 ## Inicio rápido (doble clic)
 
 Requisito: **Python 3.11 o superior** ([python.org/downloads](https://www.python.org/downloads/);

@@ -1,0 +1,24 @@
+{
+  "name": "Sistema de Monitoreo",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "pip install --quiet -e '.[dev]'",
+  "postAttachCommand": {
+    "api": "python -m monitoreo",
+    "simulador": "python -m monitoreo.simulator --url http://localhost:8000 --rate 3"
+  },
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": {
+      "label": "Dashboard de monitoreo",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  "customizations": {
+    "codespaces": {
+      "openFiles": ["README.md"]
+    },
+    "vscode": {
+      "extensions": ["ms-python.python", "redhat.vscode-yaml"]
+    }
+  }
+}
