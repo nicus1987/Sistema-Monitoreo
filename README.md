@@ -33,7 +33,17 @@ en Windows marcar *"Add python.exe to PATH"* al instalar).
 El script crea el entorno, instala dependencias, levanta la API, abre el dashboard en
 http://localhost:8000 y envía tráfico de prueba con escenarios de fraude.
 
-![Dashboard en vivo](docs/dashboard.png)
+### Consola de monitoreo (http://localhost:8000)
+
+| Pestaña | Para qué sirve |
+|---|---|
+| **Tiempo real** | Cada transacción evaluada al instante, con decisión, score y motivos. Filtro para ver sólo las riesgosas; clic en una fila para ir a su alerta. |
+| **Alertas** | Bandeja del analista ordenada por severidad y SLA. Tomar, cerrar (falso positivo / fraude confirmado), escalar a Cumplimiento y registrar ROS, con fundamento obligatorio y 4 ojos. |
+| **Reglas** | Catálogo vigente con búsqueda, condición, normativa y cantidad de disparos. |
+| **Métricas** | Latencia, decisiones y % de rechazo por canal, reglas más disparadas, fallas del motor. |
+
+![Tiempo real](docs/dashboard.png)
+![Gestión de alertas](docs/consola_alertas.png)
 
 ## Inicio manual
 
