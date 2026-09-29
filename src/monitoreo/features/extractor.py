@@ -9,19 +9,32 @@ from __future__ import annotations
 
 import math
 import statistics
-from datetime import datetime
+import logging
+from datetime import datetime, timedelta, timezone, tzinfo
 from typing import Any
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ..models import Action, Channel, Method, Transaction
 from .store import BehaviorStore, Event, agg, distinct
 
 M10 = 600
+log = logging.getLogger(__name__)
+
 H1 = 3600
 H24 = 86400
 D7 = 7 * H24
 D30 = 30 * H24
 D90 = 90 * H24
+
+
+def load_timezone(name: str) -> tzinfo:
+    """Carga el huso horario; si el sistema no tiene la base IANA (p.ej. Windows
+    sin el paquete tzdata) usa UTC-3 fijo (Argentina no aplica horario de verano)."""
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        log.warning("Huso horario %s no disponible; se usa UTC-3 fijo. Instale el paquete tzdata.", name)
+        return timezone(timedelta(hours=-3), "ART")
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -36,7 +49,7 @@ class FeatureExtractor:
     def __init__(self, store: BehaviorStore, params: dict[str, Any]):
         self.store = store
         self.params = params
-        self.tz = ZoneInfo(params.get("timezone", "America/Argentina/Buenos_Aires"))
+        self.tz = load_timezone(params.get("timezone", "America/Argentina/Buenos_Aires"))
 
     # ------------------------------------------------------------------ keys
     @staticmethod

@@ -80,3 +80,18 @@ def test_latency_under_budget(service):
     for e in sim.normal_traffic(200):
         service.evaluate(Transaction.model_validate(e))
     assert service.metrics.snapshot()["latency_ms"]["p99"] < service.params["latency_budget_ms"]
+
+
+def test_starts_without_timezone_database(monkeypatch):
+    """En Windows sin tzdata no existe la base IANA: el motor debe arrancar igual (UTC-3)."""
+    from zoneinfo import ZoneInfoNotFoundError
+
+    from monitoreo.features import extractor
+
+    def missing(name):
+        raise ZoneInfoNotFoundError(name)
+    monkeypatch.setattr(extractor, "ZoneInfo", missing)
+    svc = MonitoringService(DEFAULT_CONFIG_DIR)
+    d = svc.evaluate(txn())
+    assert d.features["hour_local"] == d.evaluated_at.astimezone(svc.extractor.tz).hour
+    assert svc.extractor.tz.utcoffset(None).total_seconds() == -3 * 3600
