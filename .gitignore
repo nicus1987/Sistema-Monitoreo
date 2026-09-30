@@ -6,3 +6,6 @@ __pycache__/
 data/audit/*.jsonl
 .env
 monitoreo-api.log
+scripts/resumen_normativo/node_modules/
+scripts/resumen_normativo/package*.json
+scripts/resumen_normativo/rules.json
